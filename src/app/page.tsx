@@ -3,6 +3,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   PlannerInput,
+  ExpenseOverridesMap,
+  ExpenseItemOverride,
+  parseSharedLinkParams,
   calculateGiftPeriods,
   generateCalendarTodos,
   calculateDelaySimulations,
@@ -10,6 +13,8 @@ import {
   generateInstallmentSchedule,
   calculateLumpSumExpenses,
   generateAgeYearTable,
+  applySingleInstallmentAmount,
+  applyBatchInstallmentAmounts,
 } from '@/lib/calculator';
 import { Sheet1To3GiftOverview } from '@/components/sheets/Sheet1And2GiftSummary';
 import { Sheet4To6DelayAndChecklists } from '@/components/sheets/Sheet4And5DelayAndAllowance';
@@ -25,12 +30,14 @@ import {
   Baby,
   TrendingUp,
   HeartHandshake,
-  CheckSquare,
+  FileText,
+  Trash2,
   Share2,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
   Wallet,
+  Check,
 } from 'lucide-react';
 
 const STORAGE_KEY = 'child_gift_planner_v2';
@@ -45,7 +52,7 @@ const DEFAULT_INPUT: PlannerInput = {
   monthlyGiftWon: 200000,
 };
 
-// 캡처본(013.jpeg)의 손글씨 메모장 예시 데이터
+// 캡처본(013.jpeg)의 손글씨 메모장 예시 데이터 (예시 모드 전용)
 const SAMPLE_POCKET_RECORDS: PocketMoneyRecord[] = [
   {
     id: 'sample-1',
@@ -55,8 +62,8 @@ const SAMPLE_POCKET_RECORDS: PocketMoneyRecord[] = [
     relation: '외가',
     amount: 100000,
     whereKept: '용돈통장',
-    isGiftTaxable: 'X',
-    memo: '외가 결혼식 참석 용돈',
+    isGiftTaxable: '',
+    memo: '외가 결혼식 참석 용돈 (예시)',
   },
   {
     id: 'sample-2',
@@ -66,8 +73,8 @@ const SAMPLE_POCKET_RECORDS: PocketMoneyRecord[] = [
     relation: '조부모',
     amount: 200000,
     whereKept: '용돈통장',
-    isGiftTaxable: 'X',
-    memo: '명절 용돈',
+    isGiftTaxable: '',
+    memo: '명절 용돈 (예시)',
   },
   {
     id: 'sample-3',
@@ -77,8 +84,8 @@ const SAMPLE_POCKET_RECORDS: PocketMoneyRecord[] = [
     relation: '조부모',
     amount: 250000,
     whereKept: '용돈통장',
-    isGiftTaxable: 'X',
-    memo: '명절 용돈',
+    isGiftTaxable: '',
+    memo: '명절 용돈 (예시)',
   },
   {
     id: 'sample-4',
@@ -88,8 +95,8 @@ const SAMPLE_POCKET_RECORDS: PocketMoneyRecord[] = [
     relation: '시가',
     amount: 150000,
     whereKept: '용돈통장',
-    isGiftTaxable: 'X',
-    memo: '기타친족 (1,000만원 별도 한도)',
+    isGiftTaxable: '',
+    memo: '기타친족 1,000만원 한도 확인 대상 (예시)',
   },
   {
     id: 'sample-5',
@@ -99,8 +106,8 @@ const SAMPLE_POCKET_RECORDS: PocketMoneyRecord[] = [
     relation: '시가',
     amount: 100000,
     whereKept: '용돈통장',
-    isGiftTaxable: 'X',
-    memo: '기타친족',
+    isGiftTaxable: '',
+    memo: '기타친족 (예시)',
   },
   {
     id: 'sample-6',
@@ -110,8 +117,8 @@ const SAMPLE_POCKET_RECORDS: PocketMoneyRecord[] = [
     relation: '회사동료',
     amount: 50000,
     whereKept: '현금',
-    isGiftTaxable: 'X',
-    memo: '축하 용돈',
+    isGiftTaxable: '',
+    memo: '축하 용돈 (예시)',
   },
   {
     id: 'sample-7',
@@ -121,12 +128,12 @@ const SAMPLE_POCKET_RECORDS: PocketMoneyRecord[] = [
     relation: '회사동료',
     amount: 50000,
     whereKept: '현금',
-    isGiftTaxable: 'X',
-    memo: '축하 용돈',
+    isGiftTaxable: '',
+    memo: '축하 용돈 (예시)',
   },
 ];
 
-// 캡처본(009, 011.jpeg)의 체크 상태 예시
+// 캡처본(009, 011.jpeg)의 체크 상태 예시 (예시 모드 전용)
 const SAMPLE_CHECKED_MAP: Record<string, boolean> = {
   'allowance-2026-6': true,
   'allowance-2026-7': true,
@@ -134,6 +141,10 @@ const SAMPLE_CHECKED_MAP: Record<string, boolean> = {
   'allowance-2026-9': true,
   'allowance-2026-10': true,
   'installment-2026-10': true,
+};
+
+const SAMPLE_CHECKED_AMOUNT_MAP: Record<string, number> = {
+  'installment-2026-10': 200000,
 };
 
 const SHEET_NAV_ITEMS = [
@@ -148,24 +159,68 @@ const SHEET_NAV_ITEMS = [
   { id: 'sheet-9', label: '09. 나이·연도표' },
 ];
 
+type ViewMode = 'own' | 'demo' | 'blank' | 'shared';
+
+interface UserRecordSnapshot {
+  input: PlannerInput;
+  checkedMap: Record<string, boolean>;
+  checkedAmountMap: Record<string, number>;
+  memoMap: Record<string, string>;
+  pocketRecords: PocketMoneyRecord[];
+  expenseOverrides: ExpenseOverridesMap;
+}
+
+function sanitizeInput(raw: unknown): PlannerInput {
+  if (!raw || typeof raw !== 'object') return DEFAULT_INPUT;
+  const obj = raw as Record<string, unknown>;
+  return {
+    childName:
+      typeof obj.childName === 'string'
+        ? obj.childName
+        : DEFAULT_INPUT.childName,
+    blessingMessage:
+      typeof obj.blessingMessage === 'string'
+        ? obj.blessingMessage
+        : DEFAULT_INPUT.blessingMessage,
+    birthDate:
+      typeof obj.birthDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(obj.birthDate)
+        ? obj.birthDate
+        : DEFAULT_INPUT.birthDate,
+    startDate:
+      typeof obj.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(obj.startDate)
+        ? obj.startDate
+        : DEFAULT_INPUT.startDate,
+    monthlyGiftWon:
+      typeof obj.monthlyGiftWon === 'number' && Number.isFinite(obj.monthlyGiftWon)
+        ? Math.max(0, Math.floor(obj.monthlyGiftWon))
+        : DEFAULT_INPUT.monthlyGiftWon,
+    inflationRate:
+      typeof obj.inflationRate === 'number' && Number.isFinite(obj.inflationRate)
+        ? Math.max(0, Math.min(15, obj.inflationRate))
+        : DEFAULT_INPUT.inflationRate,
+  };
+}
+
 export default function ChildGiftPlannerPage() {
   const [input, setInput] = useState<PlannerInput>(DEFAULT_INPUT);
   const [checkedMap, setCheckedMap] = useState<Record<string, boolean>>({});
+  const [checkedAmountMap, setCheckedAmountMap] = useState<
+    Record<string, number>
+  >({});
   const [memoMap, setMemoMap] = useState<Record<string, string>>({});
   const [pocketRecords, setPocketRecords] = useState<PocketMoneyRecord[]>([]);
+  const [expenseOverrides, setExpenseOverrides] = useState<ExpenseOverridesMap>(
+    {}
+  );
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isDemo, setIsDemo] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('own');
+  const [storageBlocked, setStorageBlocked] = useState(false);
   const [notice, setNotice] = useState('');
   const [hasLegacy, setHasLegacy] = useState(false);
   const [isMobileFormOpen, setIsMobileFormOpen] = useState(true);
   const [shareCopied, setShareCopied] = useState(false);
 
-  const ownSnapshot = useRef<{
-    input: PlannerInput;
-    checkedMap: Record<string, boolean>;
-    memoMap: Record<string, string>;
-    pocketRecords: PocketMoneyRecord[];
-  } | null>(null);
+  const ownSnapshot = useRef<UserRecordSnapshot | null>(null);
 
   // LocalStorage 및 URL 쿼리 파라미터 로드 (SSR 하이드레이션 완료 후 비동기 복원)
   useEffect(() => {
@@ -173,43 +228,81 @@ export default function ChildGiftPlannerPage() {
       try {
         setHasLegacy(!!localStorage.getItem(LEGACY_KEY));
         const saved = localStorage.getItem(STORAGE_KEY);
-        let baseInput = DEFAULT_INPUT;
+
+        let savedInput = DEFAULT_INPUT;
+        let savedCheckedMap: Record<string, boolean> = {};
+        let savedCheckedAmountMap: Record<string, number> = {};
+        let savedMemoMap: Record<string, string> = {};
+        let savedPocketRecords: PocketMoneyRecord[] = [];
+        let savedExpenseOverrides: ExpenseOverridesMap = {};
+
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed.input) baseInput = { ...DEFAULT_INPUT, ...parsed.input };
-          if (parsed.checkedMap) setCheckedMap(parsed.checkedMap);
-          if (parsed.memoMap) setMemoMap(parsed.memoMap);
-          if (parsed.pocketRecords) setPocketRecords(parsed.pocketRecords);
+          if (!parsed || typeof parsed !== 'object') {
+            throw new Error('Invalid storage structure');
+          }
+          savedInput = sanitizeInput(parsed.input);
+          if (parsed.checkedMap && typeof parsed.checkedMap === 'object') {
+            savedCheckedMap = parsed.checkedMap;
+          }
+          if (
+            parsed.checkedAmountMap &&
+            typeof parsed.checkedAmountMap === 'object'
+          ) {
+            savedCheckedAmountMap = parsed.checkedAmountMap;
+          }
+          if (parsed.memoMap && typeof parsed.memoMap === 'object') {
+            savedMemoMap = parsed.memoMap;
+          }
+          if (Array.isArray(parsed.pocketRecords)) {
+            savedPocketRecords = parsed.pocketRecords.filter(
+              (r: unknown) => r && typeof r === 'object'
+            );
+          }
+          if (
+            parsed.expenseOverrides &&
+            typeof parsed.expenseOverrides === 'object'
+          ) {
+            savedExpenseOverrides = parsed.expenseOverrides;
+          }
         }
 
-        // URL 쿼리 파라미터가 있는 경우 반영 (아내/가족에게 링크 공유 시)
-        const params = new URLSearchParams(window.location.search);
-        const qName = params.get('name');
-        const qBirth = params.get('birth');
-        const qStart = params.get('start');
-        const qMonthly = params.get('monthly');
-        const qRate = params.get('rate');
-        const qMsg = params.get('msg');
+        // URL 공유 쿼리 파라미터가 있는 경우:
+        // 기존 내 기록을 덮어쓰거나 기존 체크/용돈과 섞이지 않도록 별도의 'shared(공유 링크 미리보기)' 모드로 연다.
+        const { hasSharedParams, sharedInput } = parseSharedLinkParams(
+          window.location.search,
+          DEFAULT_INPUT
+        );
 
-        if (qName || qBirth || qStart || qMonthly || qRate || qMsg) {
-          baseInput = {
-            childName: qName ?? baseInput.childName,
-            birthDate: qBirth ?? baseInput.birthDate,
-            startDate: qStart ?? baseInput.startDate,
-            monthlyGiftWon: qMonthly
-              ? Math.max(0, Number(qMonthly) || baseInput.monthlyGiftWon)
-              : baseInput.monthlyGiftWon,
-            inflationRate: qRate
-              ? parseFloat(qRate) || baseInput.inflationRate
-              : baseInput.inflationRate,
-            blessingMessage: qMsg ?? baseInput.blessingMessage,
+        if (hasSharedParams) {
+          ownSnapshot.current = {
+            input: savedInput,
+            checkedMap: savedCheckedMap,
+            checkedAmountMap: savedCheckedAmountMap,
+            memoMap: savedMemoMap,
+            pocketRecords: savedPocketRecords,
+            expenseOverrides: savedExpenseOverrides,
           };
+          setViewMode('shared');
+          setInput(sharedInput);
+          setCheckedMap({});
+          setCheckedAmountMap({});
+          setMemoMap({});
+          setPocketRecords([]);
+          setExpenseOverrides({});
+        } else {
+          setViewMode('own');
+          setInput(savedInput);
+          setCheckedMap(savedCheckedMap);
+          setCheckedAmountMap(savedCheckedAmountMap);
+          setMemoMap(savedMemoMap);
+          setPocketRecords(savedPocketRecords);
+          setExpenseOverrides(savedExpenseOverrides);
         }
-
-        setInput(baseInput);
       } catch {
+        setStorageBlocked(true);
         setNotice(
-          '저장된 내용을 읽지 못했어요. 기존 원본을 덮어쓰지 않도록 저장을 중단했어요.'
+          '저장된 데이터를 읽지 못해 기존 원본 보호를 위해 자동 저장을 일시 중단했습니다.'
         );
       } finally {
         setIsLoaded(true);
@@ -217,27 +310,39 @@ export default function ChildGiftPlannerPage() {
     });
   }, []);
 
-  // LocalStorage 자동 저장
+  // LocalStorage 자동 저장 (예시·백지·공유 미리보기 모드 및 저장 차단 상태에서는 절대 덮어쓰지 않음)
   useEffect(() => {
-    if (!isLoaded || isDemo || notice.includes('저장을 중단')) return;
+    if (!isLoaded || viewMode !== 'own' || storageBlocked) return;
     try {
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
           input,
           checkedMap,
+          checkedAmountMap,
           memoMap,
           pocketRecords,
+          expenseOverrides,
         })
       );
     } catch {
       queueMicrotask(() =>
         setNotice(
-          '이 기기에 저장하지 못했어요. 화면을 닫기 전에 내용을 확인해 주세요.'
+          '이 기기 브라우저 저장소에 기록하지 못했습니다. 창을 닫기 전에 인쇄 또는 PDF로 보관해 주세요.'
         )
       );
     }
-  }, [input, checkedMap, memoMap, pocketRecords, isLoaded, isDemo, notice]);
+  }, [
+    input,
+    checkedMap,
+    checkedAmountMap,
+    memoMap,
+    pocketRecords,
+    expenseOverrides,
+    isLoaded,
+    viewMode,
+    storageBlocked,
+  ]);
 
   const validDates =
     /^\d{4}-\d{2}-\d{2}$/.test(input.birthDate) &&
@@ -268,8 +373,13 @@ export default function ChildGiftPlannerPage() {
   );
 
   const delaySimulations = useMemo(
-    () => calculateDelaySimulations(calcInput.birthDate, calcInput.startDate),
-    [calcInput.birthDate, calcInput.startDate]
+    () =>
+      calculateDelaySimulations(
+        calcInput.birthDate,
+        calcInput.startDate,
+        input.monthlyGiftWon
+      ),
+    [calcInput.birthDate, calcInput.startDate, input.monthlyGiftWon]
   );
 
   const allowanceInfo = useMemo(
@@ -287,9 +397,10 @@ export default function ChildGiftPlannerPage() {
       calculateLumpSumExpenses(
         calcInput.birthDate,
         calcInput.startDate,
-        input.inflationRate
+        input.inflationRate,
+        expenseOverrides
       ),
-    [calcInput.birthDate, calcInput.startDate, input.inflationRate]
+    [calcInput.birthDate, calcInput.startDate, input.inflationRate, expenseOverrides]
   );
 
   const ageYearRows = useMemo(
@@ -298,12 +409,73 @@ export default function ChildGiftPlannerPage() {
     [calcInput.birthDate, calcInput.startDate, periods]
   );
 
-  // 핸들러
+  // 핸들러: 체크 시점에 월 입금액 스냅샷을 함께 저장하여 추후 월 계획액 변경 시 과거 입금 기록 변조 방지
   const handleToggleCheck = (id: string) => {
+    const willBeChecked = !checkedMap[id];
     setCheckedMap((prev) => ({
       ...prev,
-      [id]: !prev[id],
+      [id]: willBeChecked,
     }));
+
+    if (id.startsWith('installment-')) {
+      setCheckedAmountMap((prev) => {
+        const next = { ...prev };
+        if (willBeChecked) {
+          next[id] = input.monthlyGiftWon;
+        } else {
+          delete next[id];
+        }
+        return next;
+      });
+    }
+  };
+
+  // 개별 월(key)의 실제 입금액 확정·수정 또는 미확인(null/'') 전환
+  const handleSetInstallmentMonthAmount = (
+    key: string,
+    rawInput: string | number | null
+  ): boolean => {
+    const res = applySingleInstallmentAmount(
+      checkedMap,
+      checkedAmountMap,
+      key,
+      rawInput
+    );
+    if (res.status === 'invalid') {
+      return false;
+    }
+    setCheckedAmountMap(res.nextAmountMap);
+    const match = /^installment-(\d{4})-(\d{1,2})$/.exec(key);
+    const ymLabel = match ? `${match[1]}년 ${match[2]}월` : key;
+    if (res.status === 'unverified') {
+      setNotice(`${ymLabel} 입금 기록을 '미확인' 상태로 변경했습니다.`);
+    } else if (typeof res.amountWon === 'number') {
+      setNotice(
+        `${ymLabel} 실제 입금액을 ${res.amountWon.toLocaleString('ko-KR')}원으로 저장했습니다.`
+      );
+    }
+    return true;
+  };
+
+  // 사용자가 명시적으로 선택한 미확인 기록(selectedKeys)에만 일괄 금액 적용
+  const handleBatchSetInstallmentAmounts = (
+    selectedKeys: string[],
+    rawInput: string | number
+  ): boolean => {
+    const res = applyBatchInstallmentAmounts(
+      checkedMap,
+      checkedAmountMap,
+      selectedKeys,
+      rawInput
+    );
+    if (res.status !== 'applied' || typeof res.amountWon !== 'number') {
+      return false;
+    }
+    setCheckedAmountMap(res.nextAmountMap);
+    setNotice(
+      `선택한 미확인 기록 ${res.appliedKeys.length}건을 월 ${res.amountWon.toLocaleString('ko-KR')}원으로 확정했습니다.`
+    );
+    return true;
   };
 
   const handleChangeMemo = (key: string, value: string) => {
@@ -345,63 +517,168 @@ export default function ChildGiftPlannerPage() {
     setPocketRecords((prev) => prev.filter((rec) => rec.id !== id));
   };
 
-  const handleRestoreReelsSample = () => {
-    if (!isDemo) {
-      ownSnapshot.current = { input, checkedMap, memoMap, pocketRecords };
-    }
-    setIsDemo(true);
-    setInput(DEFAULT_INPUT);
-    setCheckedMap(SAMPLE_CHECKED_MAP);
-    setMemoMap({});
-    setPocketRecords(SAMPLE_POCKET_RECORDS);
+  const handleUpdateExpenseOverride = (
+    itemId: string,
+    patch: Partial<ExpenseItemOverride>
+  ) => {
+    setExpenseOverrides((prev) => ({
+      ...prev,
+      [itemId]: {
+        ...(prev[itemId] || {}),
+        ...patch,
+      },
+    }));
   };
 
-  const leaveDemo = () => {
+  const handleResetExpenseOverrides = () => {
+    setExpenseOverrides({});
+  };
+
+  // 현재 실제 기록을 스냅샷으로 보존하는 헬퍼
+  const saveOwnSnapshotIfNeeded = () => {
+    if (viewMode === 'own') {
+      ownSnapshot.current = {
+        input: { ...input },
+        checkedMap: { ...checkedMap },
+        checkedAmountMap: { ...checkedAmountMap },
+        memoMap: { ...memoMap },
+        pocketRecords: pocketRecords.map((r) => ({ ...r })),
+        expenseOverrides: { ...expenseOverrides },
+      };
+    }
+  };
+
+  // 예시 보기 진입
+  const handleEnterDemo = () => {
+    saveOwnSnapshotIfNeeded();
+    setViewMode('demo');
+    setInput(DEFAULT_INPUT);
+    setCheckedMap(SAMPLE_CHECKED_MAP);
+    setCheckedAmountMap(SAMPLE_CHECKED_AMOUNT_MAP);
+    setMemoMap({});
+    setPocketRecords(SAMPLE_POCKET_RECORDS.map((r) => ({ ...r })));
+    setExpenseOverrides({});
+    setNotice('');
+  };
+
+  // 백지 양식 미리보기 진입 (내 실제 저장 기록은 삭제하지 않고 화면만 깨끗한 빈 양식으로 전환)
+  const handleEnterBlankPreview = () => {
+    saveOwnSnapshotIfNeeded();
+    setViewMode('blank');
+    setCheckedMap({});
+    setCheckedAmountMap({});
+    setMemoMap({});
+    setPocketRecords([]);
+    setNotice('');
+  };
+
+  // 예시·백지·공유 미리보기 모드에서 원래 내 실제 기록으로 복귀
+  const handleReturnToOwnRecord = () => {
+    if (typeof window !== 'undefined' && window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     const own = ownSnapshot.current;
     if (own) {
       setInput(own.input);
       setCheckedMap(own.checkedMap);
+      setCheckedAmountMap(own.checkedAmountMap);
       setMemoMap(own.memoMap);
       setPocketRecords(own.pocketRecords);
+      setExpenseOverrides(own.expenseOverrides);
     }
-    setIsDemo(false);
+    setViewMode('own');
   };
 
+  // 공유 링크 미리보기의 설정을 내 기록으로 명시적 적용 (기존 다른 아이 체크 기록과 섞이지 않도록 새 기록으로 적용)
+  const handleApplySharedLinkToOwn = () => {
+    if (
+      !window.confirm(
+        '현재 공유 링크의 아이 정보와 계획 설정을 내 기록으로 적용할까요?\n(기존에 저장된 다른 기록과 섞이지 않도록 체크·용돈·메모 칸은 빈 상태로 새로 시작합니다.)'
+      )
+    ) {
+      return;
+    }
+    if (typeof window !== 'undefined' && window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    setCheckedMap({});
+    setCheckedAmountMap({});
+    setMemoMap({});
+    setPocketRecords([]);
+    setExpenseOverrides({});
+    ownSnapshot.current = null;
+    setViewMode('own');
+    setNotice('공유 링크의 설정을 내 기록으로 적용했습니다.');
+  };
+
+  // 내 실제 기록 초기화 (명시적 확인 후 실제 저장 기록만 비움, v1 원본은 보존)
+  const handleClearOwnRecord = () => {
+    if (viewMode !== 'own') {
+      handleReturnToOwnRecord();
+      return;
+    }
+    if (
+      window.confirm(
+        '현재 기기에 저장된 내 실제 기록(입금 체크, 용돈 기록, 메모, 목돈 설정)을 모두 비울까요?\n※ 인쇄만 빈 양식으로 하시려면 [백지 양식 보기] 버튼을 이용해 주세요.'
+      )
+    ) {
+      setCheckedMap({});
+      setCheckedAmountMap({});
+      setMemoMap({});
+      setPocketRecords([]);
+      setExpenseOverrides({});
+      setStorageBlocked(false);
+      setNotice('내 기록을 빈 상태로 초기화했습니다.');
+    }
+  };
+
+  // 구버전(v1) 기록 명시적 가져오기 (원본 보존 + 증여 여부 미확인 전환)
   const importLegacy = () => {
     if (
       !window.confirm(
-        '이전 버전에는 예시 기록이 섞여 있을 수 있어요. 현재 내 기록을 이전 기록으로 바꿀까요? 이전 원본은 보존됩니다.'
+        '이전 버전(v1) 저장 데이터에는 초기 예시 기록이 섞여 있을 수 있습니다.\n가져오기를 실행하면 현재 화면의 내 기록이 이전 버전 데이터로 대체됩니다(기존 v1 원본은 삭제되지 않고 그대로 보존됩니다). 진행할까요?'
       )
     )
       return;
     try {
-      const data = JSON.parse(localStorage.getItem(LEGACY_KEY) || '{}');
-      setInput({ ...DEFAULT_INPUT, ...data.input });
-      setCheckedMap(data.checkedMap || {});
-      setMemoMap(data.memoMap || {});
+      const raw = localStorage.getItem(LEGACY_KEY);
+      if (!raw) {
+        setNotice('가져올 이전 버전 기록이 없습니다.');
+        return;
+      }
+      const data = JSON.parse(raw);
+      if (!data || typeof data !== 'object') {
+        throw new Error('Malformed legacy data');
+      }
+      setViewMode('own');
+      setStorageBlocked(false);
+      setInput(sanitizeInput(data.input));
+      setCheckedMap(
+        data.checkedMap && typeof data.checkedMap === 'object'
+          ? data.checkedMap
+          : {}
+      );
+      setCheckedAmountMap({});
+      setMemoMap(
+        data.memoMap && typeof data.memoMap === 'object' ? data.memoMap : {}
+      );
       setPocketRecords(
-        (data.pocketRecords || []).map((r: PocketMoneyRecord) => ({
-          ...r,
-          isGiftTaxable: '',
-        }))
+        Array.isArray(data.pocketRecords)
+          ? data.pocketRecords
+              .filter((r: unknown) => r && typeof r === 'object')
+              .map((r: PocketMoneyRecord) => ({
+                ...r,
+                isGiftTaxable: '',
+              }))
+          : []
       );
       setNotice(
-        '이전 기록을 가져왔어요. 체크와 용돈에 예시가 섞여 있는지 확인해 주세요. 증여 여부는 다시 확인하도록 미확인으로 두었어요.'
+        '이전 버전(v1) 기록을 가져왔습니다. 과거 체크 항목은 당시 입금액을 확인해 주시고, 용돈의 증여 해당 여부는 계좌 기준 오판을 막기 위해 모두 ‘미확인’으로 전환했습니다.'
       );
     } catch {
-      setNotice('이전 기록을 읽지 못했어요. 원본은 보존되어 있어요.');
-    }
-  };
-
-  const handleResetAllChecks = () => {
-    if (
-      window.confirm(
-        '모든 체크박스와 용돈 기록, 메모를 빈 상태로 초기화할까요? (인쇄용 깨끗한 양식으로 만듭니다)'
-      )
-    ) {
-      setCheckedMap({});
-      setMemoMap({});
-      setPocketRecords([]);
+      setNotice(
+        '이전 버전(v1) 데이터를 읽는 중 오류가 발생했습니다. 기존 v1 원본은 삭제하지 않고 그대로 보존했습니다.'
+      );
     }
   };
 
@@ -420,7 +697,7 @@ export default function ChildGiftPlannerPage() {
       try {
         await navigator.share({
           title: `${input.childName} 증여 & 미래 목돈 플래너`,
-          text: `${input.childName}의 만 35세까지 증여 구간 및 미래 목돈 타임라인입니다.`,
+          text: `${input.childName}의 만 35세까지 증여 준비 구간 및 미래 목돈 계획표입니다.`,
           url: shareUrl,
         });
         return;
@@ -447,7 +724,7 @@ export default function ChildGiftPlannerPage() {
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-slate-100 pb-16">
-      {/* 상단 고정 컨트롤 패널 (모바일 가로 오버플로우 완벽 차단, 인쇄 시 숨김) */}
+      {/* 상단 고정 컨트롤 패널 (모바일 가로 오버플로우 차단, 인쇄 시 숨김) */}
       <header className="no-print sticky top-0 z-30 w-full max-w-full overflow-hidden bg-white/95 backdrop-blur border-b border-slate-200 shadow-xs">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
           {/* 상단 제목 및 액션 버튼 바 */}
@@ -456,14 +733,14 @@ export default function ChildGiftPlannerPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-100 text-emerald-800 shrink-0">
-                    <Sparkles className="w-3 h-3" /> 생년월일 원클릭 자동 설계
+                    <Sparkles className="w-3 h-3" /> 가족 증여·목돈 계획 도구
                   </span>
                   <h1 className="text-sm sm:text-lg font-extrabold text-slate-900 tracking-tight truncate">
-                    아이 증여 구간 & 미래 목돈 바인더 생성기 (9종 시트)
+                    아이 증여 구간 & 미래 목돈 바인더 (9종 시트)
                   </h1>
                 </div>
                 <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
-                  아이 생년월일과 첫 증여 시작일만 입력하면 만 35세까지의 증여 구간, 신고 기한, 체크리스트, 물가 반영 등록금·결혼자금이 즉시 계산됩니다.
+                  생년월일과 월 증여 계획액을 입력하면 만 35세까지의 10년 단위 준비 일정, 신고기한, 입금 체크표, 미래 목돈 시나리오를 정리합니다.
                 </p>
               </div>
 
@@ -483,7 +760,7 @@ export default function ChildGiftPlannerPage() {
               </button>
             </div>
 
-            {/* 액션 버튼 그룹 (모바일 자동 줄바꿈) */}
+            {/* 액션 버튼 그룹 */}
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
@@ -493,22 +770,80 @@ export default function ChildGiftPlannerPage() {
                 <Share2 className="w-3.5 h-3.5" />
                 {shareCopied ? '링크 복사됨!' : '설정 링크 공유'}
               </button>
-              <button
-                type="button"
-                onClick={handleRestoreReelsSample}
-                className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                예시 따로 보기
-              </button>
-              <button
-                type="button"
-                onClick={handleResetAllChecks}
-                className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors cursor-pointer"
-              >
-                <CheckSquare className="w-3.5 h-3.5" />
-                백지 양식(체크 비우기)
-              </button>
+
+              {viewMode === 'demo' ? (
+                <button
+                  type="button"
+                  onClick={handleReturnToOwnRecord}
+                  className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  예시 닫기 (내 기록 복원)
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleEnterDemo}
+                  className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  title="내 기록을 덮어쓰지 않고 작성 예시를 별도 화면으로 확인합니다"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  예시 보기
+                </button>
+              )}
+
+              {viewMode === 'blank' ? (
+                <button
+                  type="button"
+                  onClick={handleReturnToOwnRecord}
+                  className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-bold bg-sky-700 hover:bg-sky-800 text-white transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  백지 닫기 (내 기록 복원)
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleEnterBlankPreview}
+                  className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-semibold bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 transition-colors cursor-pointer"
+                  title="저장된 내 기록을 지우지 않고 인쇄용 빈 양식 화면으로 전환합니다"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  백지 양식 보기(인쇄용)
+                </button>
+              )}
+
+              {viewMode === 'shared' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleApplySharedLinkToOwn}
+                    className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />이 공유 설정을 내 기록으로 적용
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReturnToOwnRecord}
+                    className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800 transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />내 실제 기록으로 돌아가기
+                  </button>
+                </>
+              )}
+
+              {viewMode === 'own' && (
+                <button
+                  type="button"
+                  onClick={handleClearOwnRecord}
+                  className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 transition-colors cursor-pointer"
+                  title="기기에 저장된 내 체크·용돈·메모 기록을 실제로 비웁니다"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  내 기록 초기화
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => window.print()}
@@ -535,7 +870,7 @@ export default function ChildGiftPlannerPage() {
             </div>
           )}
 
-          {/* 반응형 입력 폼 그리드 (모든 셀에 min-w-0 적용하여 모바일 date/number input 오버플로우 완벽 차단) */}
+          {/* 반응형 입력 폼 그리드 */}
           <div
             className={`${
               isMobileFormOpen ? 'grid' : 'hidden md:grid'
@@ -605,15 +940,15 @@ export default function ChildGiftPlannerPage() {
                 max="1000000000"
                 step="1000"
                 value={input.monthlyGiftWon}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const num = Number(e.target.value);
                   setInput((prev) => ({
                     ...prev,
-                    monthlyGiftWon: Math.min(
-                      1000000000,
-                      Math.max(0, Number(e.target.value) || 0)
-                    ),
-                  }))
-                }
+                    monthlyGiftWon: Number.isFinite(num)
+                      ? Math.min(1000000000, Math.max(0, Math.floor(num)))
+                      : 0,
+                  }));
+                }}
                 className="w-full min-w-0 px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-800"
               />
             </div>
@@ -629,15 +964,15 @@ export default function ChildGiftPlannerPage() {
                 min="0"
                 max="15"
                 value={input.inflationRate}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const num = parseFloat(e.target.value);
                   setInput((prev) => ({
                     ...prev,
-                    inflationRate: Math.max(
-                      0,
-                      Math.min(15, parseFloat(e.target.value) || 0)
-                    ),
-                  }))
-                }
+                    inflationRate: Number.isFinite(num)
+                      ? Math.max(0, Math.min(15, num))
+                      : 0,
+                  }));
+                }}
                 className="w-full min-w-0 px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-800"
               />
             </div>
@@ -662,7 +997,7 @@ export default function ChildGiftPlannerPage() {
             </div>
           </div>
 
-          {/* 시트 빠른 이동 탭 (내부에서만 부드럽게 가로 스크롤) */}
+          {/* 시트 빠른 이동 탭 */}
           <div className="w-full max-w-full overflow-x-auto no-scrollbar pt-2.5 pb-0.5">
             <div className="flex items-center gap-1.5 w-max">
               {SHEET_NAV_ITEMS.map((nav) => (
@@ -687,36 +1022,58 @@ export default function ChildGiftPlannerPage() {
       >
         <div className="flex flex-wrap items-center gap-2">
           <strong className="font-bold text-slate-900">
-            {isDemo
-              ? '예시 모드 — 실제 기록이 아니며 저장되지 않습니다.'
-              : '내 기록 — 새 기록은 빈 상태에서 시작합니다.'}
+            {viewMode === 'demo'
+              ? '예시 보기 모드 — 지금 화면에서 수정해도 내 실제 기록에는 저장되지 않습니다.'
+              : viewMode === 'blank'
+              ? '백지 양식 미리보기 모드 — 내 실제 기록은 안전하게 보관 중이며, 현재 화면만 빈 양식으로 표시합니다.'
+              : viewMode === 'shared'
+              ? '공유 링크 미리보기 모드 — 공유받은 계획 조건을 보고 있으며, 내 기존 기록은 덮어쓰지 않고 보관 중입니다.'
+              : '내 기록 모드 — 입력한 체크·메모·용돈 기록이 이 기기에만 자동 저장됩니다.'}
           </strong>
-          {isDemo && (
+          {viewMode === 'shared' && (
+            <>
+              <button
+                type="button"
+                className="underline font-bold text-indigo-700 cursor-pointer"
+                onClick={handleApplySharedLinkToOwn}
+              >
+                이 공유 설정을 내 기록으로 적용
+              </button>
+              <button
+                type="button"
+                className="underline font-bold text-emerald-700 cursor-pointer"
+                onClick={handleReturnToOwnRecord}
+              >
+                내 실제 기록으로 돌아가기
+              </button>
+            </>
+          )}
+          {(viewMode === 'demo' || viewMode === 'blank') && (
             <button
               type="button"
-              className="underline font-semibold text-emerald-700 cursor-pointer"
-              onClick={leaveDemo}
+              className="underline font-bold text-emerald-700 cursor-pointer"
+              onClick={handleReturnToOwnRecord}
             >
-              내 기록으로 돌아가기
+              내 실제 기록으로 돌아가기
             </button>
           )}
-          {hasLegacy && !isDemo && (
+          {hasLegacy && viewMode === 'own' && (
             <button
               type="button"
               className="underline font-semibold text-slate-700 cursor-pointer"
               onClick={importLegacy}
             >
-              이전 버전 기록 확인·가져오기
+              이전 버전(v1) 기록 확인·가져오기
             </button>
           )}
         </div>
         {notice && <p className="text-amber-800 font-medium">{notice}</p>}
         <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed">
-          10년 구간은 준비 일정입니다. 실제 공제 잔여액·최대 월 증여액은 계산하지 않습니다. 신고 날짜는 주말만 보정한 잠정값입니다.
+          생년월일·시작일·월 계획액을 변경해도 이미 체크한 입금 내역과 용돈 기록은 삭제되지 않습니다.
         </p>
         {!validDates && (
           <p role="alert" className="text-red-600 font-bold">
-            첫 증여일은 생일보다 빠를 수 없습니다. 날짜를 확인해 주세요.
+            첫 증여일은 아이 생년월일보다 빠를 수 없습니다. 날짜를 확인해 주세요.
           </p>
         )}
       </div>
@@ -741,7 +1098,10 @@ export default function ChildGiftPlannerPage() {
           allowanceInfo={allowanceInfo}
           installmentRows={installmentRows}
           checkedMap={checkedMap}
+          checkedAmountMap={checkedAmountMap}
           onToggleCheck={handleToggleCheck}
+          onSetInstallmentMonthAmount={handleSetInstallmentMonthAmount}
+          onBatchSetInstallmentAmounts={handleBatchSetInstallmentAmounts}
           memoMap={memoMap}
           onChangeMemo={handleChangeMemo}
         />
@@ -758,9 +1118,12 @@ export default function ChildGiftPlannerPage() {
           onAddPocketRecord={handleAddPocketRecord}
           onUpdatePocketRecord={handleUpdatePocketRecord}
           onRemovePocketRecord={handleRemovePocketRecord}
-          onLoadSamplePocketRecords={handleRestoreReelsSample}
+          onLoadSamplePocketRecords={handleEnterDemo}
           checkedMap={checkedMap}
           onToggleCheck={handleToggleCheck}
+          onUpdateExpenseOverride={handleUpdateExpenseOverride}
+          onResetExpenseOverrides={handleResetExpenseOverrides}
+          hasCustomExpenseOverrides={Object.keys(expenseOverrides).length > 0}
         />
       </main>
     </div>
