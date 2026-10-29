@@ -219,8 +219,10 @@ export default function ChildGiftPlannerPage() {
   const [hasLegacy, setHasLegacy] = useState(false);
   const [isMobileFormOpen, setIsMobileFormOpen] = useState(true);
   const [shareCopied, setShareCopied] = useState(false);
+  const [activeSheetId, setActiveSheetId] = useState<string>('sheet-1');
 
   const ownSnapshot = useRef<UserRecordSnapshot | null>(null);
+  const navScrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   // LocalStorage 및 URL 쿼리 파라미터 로드 (SSR 하이드레이션 완료 후 비동기 복원)
   useEffect(() => {
@@ -715,7 +717,70 @@ export default function ChildGiftPlannerPage() {
     }
   };
 
+  // 스크롤 위치에 따라 현재 보고 있는 시트(01~09) 자동 감지 (Scroll Spy)
+  useEffect(() => {
+    let rafId = 0;
+
+    const updateActiveSheet = () => {
+      rafId = 0;
+      const scrollBottom = window.innerHeight + window.scrollY;
+      const docHeight = document.documentElement.scrollHeight;
+      if (docHeight > window.innerHeight + 80 && scrollBottom >= docHeight - 36) {
+        setActiveSheetId(SHEET_NAV_ITEMS[SHEET_NAV_ITEMS.length - 1].id);
+        return;
+      }
+
+      const threshold = 130;
+      let currentId = SHEET_NAV_ITEMS[0].id;
+      for (const item of SHEET_NAV_ITEMS) {
+        const el = document.getElementById(item.id);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= threshold) {
+          currentId = item.id;
+        } else {
+          break;
+        }
+      }
+      setActiveSheetId(currentId);
+    };
+
+    const onScrollOrResize = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(updateActiveSheet);
+    };
+
+    updateActiveSheet();
+    window.addEventListener('scroll', onScrollOrResize, { passive: true });
+    window.addEventListener('resize', onScrollOrResize, { passive: true });
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+      window.removeEventListener('scroll', onScrollOrResize);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, []);
+
+  // 활성화된 시트 탭 버튼이 가로 스크롤 영역(모바일 등)에서 항상 보이도록 자동 정렬
+  useEffect(() => {
+    const container = navScrollContainerRef.current;
+    if (!container) return;
+    const activeBtn = container.querySelector<HTMLButtonElement>(
+      `button[data-sheet-nav="${activeSheetId}"]`
+    );
+    if (!activeBtn) return;
+
+    const targetLeft =
+      activeBtn.offsetLeft -
+      container.clientWidth / 2 +
+      activeBtn.clientWidth / 2;
+    container.scrollTo({
+      left: Math.max(0, targetLeft),
+      behavior: 'smooth',
+    });
+  }, [activeSheetId]);
+
   const scrollToSheet = (sheetId: string) => {
+    setActiveSheetId(sheetId);
     const el = document.getElementById(sheetId);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -723,9 +788,9 @@ export default function ChildGiftPlannerPage() {
   };
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-slate-100 pb-16">
-      {/* 상단 고정 컨트롤 패널 (모바일 가로 오버플로우 차단, 인쇄 시 숨김) */}
-      <header className="no-print sticky top-0 z-30 w-full max-w-full overflow-hidden bg-white/95 backdrop-blur border-b border-slate-200 shadow-xs">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-slate-100 pb-16">
+      {/* 상단 컨트롤 패널 (인쇄 시 숨김) */}
+      <header className="no-print w-full max-w-full overflow-hidden bg-white border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
           {/* 상단 제목 및 액션 버튼 바 */}
           <div className="flex flex-col gap-2 pb-2.5 border-b border-slate-100">
@@ -996,24 +1061,50 @@ export default function ChildGiftPlannerPage() {
               />
             </div>
           </div>
+        </div>
+      </header>
 
-          {/* 시트 빠른 이동 탭 */}
-          <div className="w-full max-w-full overflow-x-auto no-scrollbar pt-2.5 pb-0.5">
-            <div className="flex items-center gap-1.5 w-max">
-              {SHEET_NAV_ITEMS.map((nav) => (
-                <button
-                  key={nav.id}
-                  type="button"
-                  onClick={() => scrollToSheet(nav.id)}
-                  className="shrink-0 px-2.5 py-1 rounded text-[11px] font-semibold bg-slate-100 hover:bg-slate-800 hover:text-white text-slate-700 transition-colors cursor-pointer"
-                >
-                  {nav.label}
-                </button>
-              ))}
+      {/* 스크롤 시 상단에 고정되는 01~09 시트 빠른 이동 바 (Sticky + Active 표시) */}
+      <nav
+        aria-label="시트 빠른 이동"
+        className="no-print sticky top-0 z-40 w-full max-w-full bg-white/95 backdrop-blur border-b border-slate-200 shadow-xs"
+      >
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2">
+          <div
+            ref={navScrollContainerRef}
+            className="w-full max-w-full overflow-x-auto no-scrollbar"
+          >
+            <div className="flex items-center gap-1.5 w-max py-0.5">
+              {SHEET_NAV_ITEMS.map((nav) => {
+                const isActive = activeSheetId === nav.id;
+                return (
+                  <button
+                    key={nav.id}
+                    type="button"
+                    data-sheet-nav={nav.id}
+                    data-active={isActive ? 'true' : 'false'}
+                    aria-current={isActive ? 'true' : undefined}
+                    onClick={() => scrollToSheet(nav.id)}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-emerald-600 text-white font-extrabold shadow-xs ring-2 ring-emerald-600/30'
+                        : 'bg-slate-100 hover:bg-slate-800 hover:text-white text-slate-700 font-semibold'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                        isActive ? 'bg-white' : 'bg-slate-400'
+                      }`}
+                    />
+                    {nav.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
-      </header>
+      </nav>
 
       {/* 상태 및 주의 안내 배너 */}
       <div
