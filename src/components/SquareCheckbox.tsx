@@ -23,7 +23,8 @@ export function SquareCheckbox({
   return (
     <button
       type="button"
-      onClick={onChange}
+      onClick={(event) => { event.stopPropagation(); onChange(); }}
+      aria-pressed={checked}
       aria-label={label || '체크박스'}
       className={`inline-flex items-center justify-center border border-slate-600 rounded-[2px] transition-colors select-none cursor-pointer ${boxSize} ${
         checked

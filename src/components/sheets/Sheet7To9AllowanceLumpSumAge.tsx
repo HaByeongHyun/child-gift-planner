@@ -85,30 +85,30 @@ export function Sheet7To9PocketLumpSumAge({
     cumulativeTaxableTotal += sum;
   });
 
-  // 인쇄 시 총 18행이 보이도록 빈 줄 채움
+  // 인쇄 시 총 16행이 보이도록 빈 줄 채움
   const blankRowCount = Math.max(0, 16 - pocketRecords.length);
 
   return (
     <>
       {/* ==================== 시트 7: 세뱃돈·용돈 입금 기록 ==================== */}
       <section id="sheet-7" className="a4-sheet">
-        <div className="flex items-center justify-between border-b-2 border-slate-800 pb-2 mb-3">
-          <div className="flex items-center gap-2">
-            <span className="inline-block bg-lime-200 border border-lime-400 px-2 py-0.5 text-xs font-extrabold text-slate-900 rounded-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-800 pb-2 mb-3">
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+            <span className="inline-block bg-lime-200 border border-lime-400 px-2 py-0.5 text-xs font-extrabold text-slate-900 rounded-xs shrink-0">
               {childName || '우리아이'}
             </span>
-            <h2 className="text-lg font-extrabold tracking-tight text-slate-900">
+            <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900">
               세뱃돈·용돈 입금 기록
             </h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={onLoadSamplePocketRecords}
               className="no-print inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 font-semibold transition-colors cursor-pointer"
             >
               <Sparkles className="w-3 h-3" />
-              릴스 예시 용돈 불러오기
+              예시 따로 보기
             </button>
             <button
               type="button"
@@ -117,62 +117,28 @@ export function Sheet7To9PocketLumpSumAge({
             >
               <Plus className="w-3 h-3" />행 추가
             </button>
-            <span className="text-[10px] text-slate-400 font-medium">
+            <span className="text-[10px] text-slate-400 font-medium shrink-0">
               Sheet 07 · 세뱃돈·용돈 기록장
             </span>
           </div>
         </div>
 
-        {/* 기록 원칙 박스 (013~014.jpeg 완벽 재현) */}
-        <div className="border border-slate-400 rounded-sm bg-slate-50/70 p-3 text-[11px] leading-relaxed text-slate-800 space-y-1.5 mb-3">
-          <div className="font-extrabold text-slate-900 text-xs mb-1">
-            기록 원칙
-          </div>
-          <p>
-            <strong className="font-bold">① 받은 즉시 적는다.</strong> 나중에 기억하려 하면 누가 얼마 줬는지 잊어버려요.
-          </p>
-          <div>
-            <strong className="font-bold">
-              ② 정기금 외에 친족에게 받은 돈도 투자하면 증여로 볼 수 있어요.
-            </strong>
-            <ul className="list-disc pl-4 mt-0.5 space-y-0.5 text-slate-700">
-              <li>받을 때마다 날짜·금액·준 사람을 적는다.</li>
-              <li>현금이나 용돈통장에 모아 둔다.</li>
-              <li>정한 날(예: 연 1회)에 증권계좌로 한 번에 옮긴다.</li>
-              <li>입금한 달 말일부터 3개월 안에 증여신고한다.</li>
-            </ul>
-            <p className="text-slate-600 mt-0.5">
-              ※ 부모·조부모 돈은 정기금 {firstPeriod.monthlyRecommended.toLocaleString('ko-KR')}원 외에 여유가 약{' '}
-              <strong className="font-bold text-slate-900">
-                {firstPeriod.remainingLimitManwon}만원
-              </strong>
-              뿐이고, 삼촌·이모·고모 등 기타친족은 부모·조부모와 따로{' '}
-              <strong className="font-bold text-slate-900">1,000만원 한도</strong>로 봐요. (세무사 확인)
-            </p>
-          </div>
-          <p>
-            <strong className="font-bold">
-              ③ 현금 보관 또는 용돈통장에 넣고, 아이 증권계좌에 합치지 마세요.
-            </strong>
-            <br />
-            <span className="font-semibold text-slate-900">
-              현재 1차 구간 한도 : {firstPeriod.deductionLimitManwon.toLocaleString('ko-KR')}만원 - 정기금 평가액{' '}
-              {firstPeriod.evaluatedAmountManwon.toLocaleString('ko-KR')}만원 = 여유 약{' '}
-              {firstPeriod.remainingLimitManwon}만원
-            </span>
-          </p>
+        <div className="border border-slate-400 p-2.5 sm:p-3 text-[11.5px] sm:text-xs leading-relaxed mb-3">
+          받은 날짜·사람·금액·사용 목적과 신고 내역을 함께 적으세요. 현금이나 용돈통장에 보관한다고 자동으로 비과세가 되는 것은 아닙니다. 생활비·교육비 비과세는 사용 목적 등 요건을 확인해야 합니다. 증여 여부는 기본 ‘미확인’으로 두고 확인한 경우에만 선택하세요. 남은 공제액은 여기서 계산하지 않습니다.
         </div>
 
-        {/* 용돈 입금 기록 표 */}
-        <div className="overflow-x-auto mb-2">
-          <table className="sheet-table sheet-table-compact text-center">
+        <div className="sm:hidden text-right text-[10px] text-slate-400 mb-1 no-print">
+          ← 표를 좌우로 밀어서 입력/확인하세요 →
+        </div>
+        <div className="table-scroll-wrap mb-2">
+          <table className="sheet-table sheet-table-compact text-center min-w-[540px]">
             <thead>
               <tr>
-                <th className="w-16">날짜</th>
-                <th className="w-28">준 사람</th>
-                <th className="w-20">관계</th>
+                <th className="w-14">날짜</th>
+                <th className="w-26">준 사람</th>
+                <th className="w-18">관계</th>
                 <th className="w-24">금액</th>
-                <th className="w-24">어디에 넣었나</th>
+                <th className="w-22">어디에 넣었나</th>
                 <th className="w-16">
                   증여
                   <br />
@@ -260,7 +226,7 @@ export function Sheet7To9PocketLumpSumAge({
                       }
                       className="w-full px-1 py-1 text-center text-[11px] font-bold bg-transparent focus:outline-none"
                     >
-                      <option value=""></option>
+                      <option value="">미확인</option>
                       <option value="X">X</option>
                       <option value="O">O</option>
                     </select>
@@ -304,17 +270,17 @@ export function Sheet7To9PocketLumpSumAge({
           </table>
         </div>
 
-        <p className="text-[10.5px] text-slate-600 mb-2">
+        <p className="text-[10.5px] text-slate-600 mb-2 leading-relaxed">
           <strong className="font-semibold">어디에 넣었나</strong> — 현금 / 용돈통장 / 증권계좌 &nbsp;|&nbsp;{' '}
-          <strong className="font-semibold">증여 해당</strong> — 현금·용돈통장이면 X, 증권계좌에 넣어 투자했으면 O
+          <strong className="font-semibold">증여 해당</strong> — 미확인 / X(비과세 확인) / O(증여 확인). 계좌 종류로 자동 판정하지 않음
         </p>
 
         {/* 연도별 합계 (증여 해당 O 만 집계) */}
         <h3 className="text-xs font-extrabold text-slate-900 mb-1.5">
           연도별 합계 (증여 해당 O 만 집계)
         </h3>
-        <div className="overflow-x-auto mb-2">
-          <table className="sheet-table sheet-table-compact text-center">
+        <div className="table-scroll-wrap mb-2">
+          <table className="sheet-table sheet-table-compact text-center min-w-[480px]">
             <thead>
               <tr>
                 {period1Years.map((y) => (
@@ -343,171 +309,190 @@ export function Sheet7To9PocketLumpSumAge({
         </div>
 
         <p className="text-[10.5px] text-slate-600 leading-relaxed">
-          조부모·친척이 준 돈도 같은 칸에 적습니다. 증여세는 부모·조부모를 합쳐서 계산하므로, 할머니가 아이 계좌로 직접 넣어도 별도 한도가 생기지 않습니다. 증여 해당 O의 누적이 여유 약{' '}
-          {firstPeriod.remainingLimitManwon}만원에 가까워지면 그때부터는 현금 보관만 하세요.
+          부모·조부모의 일반 공제 사용액은 함께 확인합니다. 이 기록의 O 합계는 확인 표시한 금액의 합계일 뿐 개인별 남은 공제액이나 납부세액을 뜻하지 않습니다.
         </p>
       </section>
 
       {/* ==================== 시트 8: 자녀 목돈 필요 시기 체크리스트 & 자금 대응 전략 ==================== */}
       <section id="sheet-8" className="a4-sheet">
-        <div className="flex items-center justify-between border-b-2 border-slate-800 pb-2 mb-2">
-          <div className="flex items-center gap-2">
-            <span className="inline-block bg-lime-200 border border-lime-400 px-2 py-0.5 text-xs font-extrabold text-slate-900 rounded-xs">
+        <div className="flex flex-wrap items-center justify-between gap-1.5 border-b-2 border-slate-800 pb-2 mb-2">
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+            <span className="inline-block bg-lime-200 border border-lime-400 px-2 py-0.5 text-xs font-extrabold text-slate-900 rounded-xs shrink-0">
               {childName || '우리아이'}
             </span>
-            <h2 className="text-lg font-extrabold tracking-tight text-slate-900">
+            <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900">
               자녀 목돈 필요 시기 체크리스트
             </h2>
           </div>
-          <span className="text-[10px] text-slate-400 font-medium">
+          <span className="text-[10px] text-slate-400 font-medium shrink-0">
             Sheet 08 · 목돈 시점 & 자금 대응 전략
           </span>
         </div>
 
-        <p className="text-[11px] text-slate-700 leading-relaxed mb-2.5">
+        <p className="text-[11px] text-slate-700 leading-relaxed mb-2">
           {birthFormatted}생 · 금액은 지금 가격(현재가) 기준이고, 오른쪽에{' '}
           <strong className="font-bold">물가상승률 {inflationRate}%</strong>를 반영한 금액을 같이 적었습니다. 준비가 끝난 항목은 □에 체크하세요.
         </p>
 
-        <table className="sheet-table sheet-table-compact mb-2">
-          <thead>
-            <tr className="text-center">
-              <th className="w-28">항목</th>
-              <th className="w-12">
-                필수/
-                <br />
-                선택
-              </th>
-              <th className="w-24">시점</th>
-              <th>이유</th>
-              <th className="w-32">
-                예상 금액
-                <br />
-                <span className="text-[10px] font-normal">현재가</span>
-              </th>
-              <th className="w-36">
-                물가 반영
-                <br />
-                <span className="text-[10px] font-normal">
-                  연 {inflationRate}% 기준
-                </span>
-              </th>
-              <th className="w-10">준비</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lumpSumItems.map((item) => (
-              <tr key={item.id}>
-                <td className="font-bold text-slate-900 whitespace-pre-line">
-                  {item.title}
-                </td>
-                <td className="text-center font-semibold">
-                  {item.requiredOrOptional}
-                </td>
-                <td className="text-center text-[10.5px] leading-snug">
-                  <div className="whitespace-pre-line font-semibold">
-                    {item.timingAgeLabel}
-                  </div>
-                  <div className="text-slate-600">{item.timingYearLabel}</div>
-                </td>
-                <td className="text-[10.5px] text-slate-700 leading-snug">
-                  {item.reason}
-                </td>
-                <td className="text-center text-[10.5px] leading-snug">
-                  {item.presentValueLines.map((line, i) => (
-                    <div
-                      key={i}
-                      className={i === 0 ? 'font-bold text-slate-900' : 'text-slate-600'}
-                    >
-                      {line}
-                    </div>
-                  ))}
-                </td>
-                <td className="text-center text-[10.5px] leading-snug bg-sky-50/40">
-                  {item.futureValueLines.map((line, i) => (
-                    <div
-                      key={i}
-                      className={
-                        i === 0
-                          ? 'font-extrabold text-slate-950'
-                          : 'font-medium text-slate-700'
-                      }
-                    >
-                      {line}
-                    </div>
-                  ))}
-                </td>
-                <td className="text-center">
-                  <SquareCheckbox
-                    size="sm"
-                    checked={!!checkedMap[`lump-${item.id}`]}
-                    onChange={() => onToggleCheck(`lump-${item.id}`)}
-                    label={item.title}
-                  />
-                </td>
+        <div className="sm:hidden text-right text-[10px] text-slate-400 mb-1 no-print">
+          ← 좌우로 밀어서 물가 반영 금액을 확인하세요 →
+        </div>
+        <div className="table-scroll-wrap mb-2">
+          <table className="sheet-table sheet-table-compact min-w-[540px]">
+            <thead>
+              <tr className="text-center">
+                <th className="w-24">항목</th>
+                <th className="w-11">
+                  필수/
+                  <br />
+                  선택
+                </th>
+                <th className="w-22">시점</th>
+                <th>이유</th>
+                <th className="w-28">
+                  예상 금액
+                  <br />
+                  <span className="text-[10px] font-normal">현재가</span>
+                </th>
+                <th className="w-32">
+                  물가 반영
+                  <br />
+                  <span className="text-[10px] font-normal">
+                    연 {inflationRate}% 기준
+                  </span>
+                </th>
+                <th className="w-9">준비</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {lumpSumItems.map((item) => (
+                <tr key={item.id}>
+                  <td className="font-bold text-slate-900 whitespace-pre-line">
+                    {item.title}
+                  </td>
+                  <td className="text-center font-semibold whitespace-nowrap">
+                    {item.requiredOrOptional}
+                  </td>
+                  <td className="text-center text-[10.5px] leading-snug whitespace-nowrap">
+                    <div className="whitespace-pre-line font-semibold">
+                      {item.timingAgeLabel}
+                    </div>
+                    <div className="text-slate-600">{item.timingYearLabel}</div>
+                  </td>
+                  <td className="text-[10.5px] text-slate-700 leading-snug">
+                    {item.reason}
+                  </td>
+                  <td className="text-center text-[10.5px] leading-snug whitespace-nowrap">
+                    {item.presentValueLines.map((line, i) => (
+                      <div
+                        key={i}
+                        className={
+                          i === 0 ? 'font-bold text-slate-900' : 'text-slate-600'
+                        }
+                      >
+                        {line}
+                      </div>
+                    ))}
+                  </td>
+                  <td className="text-center text-[10.5px] leading-snug bg-sky-50/40 whitespace-nowrap">
+                    {item.futureValueLines.map((line, i) => (
+                      <div
+                        key={i}
+                        className={
+                          i === 0
+                            ? 'font-extrabold text-slate-950'
+                            : 'font-medium text-slate-700'
+                        }
+                      >
+                        {line}
+                      </div>
+                    ))}
+                  </td>
+                  <td className="text-center">
+                    <SquareCheckbox
+                      size="sm"
+                      checked={!!checkedMap[`lump-${item.id}`]}
+                      onChange={() => onToggleCheck(`lump-${item.id}`)}
+                      label={item.title}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <div className="border border-slate-400 rounded-sm bg-slate-50 px-2.5 py-2 text-[10.5px] text-slate-700 leading-relaxed mb-3.5">
-          금액은 평균·범위 값이라 실제와 다를 수 있습니다. 물가 반영 금액은 오늘부터 해당 시점까지 매년 {inflationRate}%씩 오른다고 계산했어요(등록금은 해마다 따로). 물가상승률은 위 설정에서 바꿀 수 있고(결혼은 만 32세 기준), 항목마다 따로 필요한 돈이라 단순히 더하지는 않았습니다.
+          등록금은 교육부 2026년 자료이며 그 외 금액은 원본의 가상 예산으로 공식 평균을 확인한 값이 아닙니다. 모든 입력 가격을 2026년 기준 계획값으로 두고 해당 연도까지 매년 {inflationRate}%씩 오른다고 계산했어요(등록금은 해마다 따로). 물가상승률은 위 설정에서 바꿀 수 있고(결혼은 만 32세의 선택 시나리오), 항목마다 따로 필요한 돈이라 단순히 더하지는 않았습니다.
         </div>
 
         {/* 증여 구간과 겹쳐보면 */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-1.5">
           증여 구간과 겹쳐보면
         </h3>
-        <table className="sheet-table sheet-table-compact mb-2">
-          <thead>
-            <tr className="text-center">
-              <th className="w-20">증여 구간</th>
-              <th className="w-28">시점</th>
-              <th className="w-20">공제</th>
-              <th className="text-left">그 10년 안에 필요한 목돈</th>
-            </tr>
-          </thead>
-          <tbody>
-            {periods.map((p) => {
-              let neededText = '-';
-              if (p.periodNumber === 2) {
-                neededText = '대학 등록금 (4년), 타지역 자취 보증금';
-              } else if (p.periodNumber === 3) {
-                neededText = '어학연수·교환학생, 취업 준비·자격증';
-              } else if (p.periodNumber === 4) {
-                neededText = '결혼 준비, 신혼집 보증금·주택자금';
-              }
-              return (
-                <tr key={p.periodNumber} className="text-center">
-                  <td className="font-bold bg-slate-50">{p.label}</td>
-                  <td className="text-[10.5px]">
-                    <div>만 {p.ageAtStart}세</div>
-                    <div className="text-slate-600">{p.startDate}~</div>
-                  </td>
-                  <td className="font-semibold">
-                    {p.deductionLimitManwon.toLocaleString('ko-KR')}만
-                  </td>
-                  <td className="text-left font-medium text-slate-800">
-                    {neededText}
-                  </td>
-                </tr>
-              );
-            })}
-            <tr className="text-center">
-              <td className="font-bold bg-slate-50">혼인·출산</td>
-              <td className="text-[10.5px]">혼인 전후 2년</td>
-              <td className="font-semibold">1억</td>
-              <td className="text-left font-medium text-slate-800">
-                결혼 준비·신혼집 일부 (위 구간 한도에 더해 쓸 수 있음)
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <p className="text-[10.5px] text-slate-600 mb-3.5">
-          구간은 첫 증여일부터 열려 나이 구간과 딱 맞지 않을 수 있어요. 신혼집은 증여 한도만으로는 부족한 규모라 별도 저축·청약·대출 계획이 필요합니다. 5년마다 이 표의 금액을 새로 점검하세요.
+        <div className="table-scroll-wrap mb-2">
+          <table className="sheet-table sheet-table-compact">
+            <thead>
+              <tr className="text-center">
+                <th className="w-16 sm:w-20">증여 구간</th>
+                <th className="w-22 sm:w-28">시점</th>
+                <th className="w-16 sm:w-20">공제</th>
+                <th className="text-left">그 10년 안에 필요한 목돈</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periods.map((p) => {
+                const neededText =
+                  lumpSumItems
+                    .filter((item) => {
+                      const years =
+                        item.timingYearLabel.match(/\d{4}/g)?.map(Number) ?? [];
+                      return (
+                        years.length > 0 &&
+                        years[0] <= p.endYear &&
+                        years[years.length - 1] >= p.startYear
+                      );
+                    })
+                    .map((item) => item.title.replace('\n', ' '))
+                    .join(', ') || '해당 시기의 예시 항목 없음';
+                return (
+                  <tr key={p.periodNumber} className="text-center">
+                    <td className="font-bold bg-slate-50 whitespace-nowrap">
+                      {p.label}
+                    </td>
+                    <td className="text-[10.5px] whitespace-nowrap">
+                      <div>만 {p.ageAtStart}세</div>
+                      <div className="text-slate-600">{p.startDate}~</div>
+                    </td>
+                    <td className="font-semibold whitespace-nowrap">
+                      {p.deductionLimitManwon.toLocaleString('ko-KR')}만
+                    </td>
+                    <td className="text-left font-medium text-slate-800 leading-snug">
+                      {neededText}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="text-center">
+                <td className="font-bold bg-slate-50 whitespace-nowrap">
+                  혼인·출산
+                </td>
+                <td className="text-[10.5px] whitespace-nowrap">
+                  혼인 전후 2년
+                </td>
+                <td className="font-semibold whitespace-nowrap">1억</td>
+                <td className="text-left font-medium text-slate-800 leading-snug">
+                  결혼 준비·신혼집 일부 (실제 요건·기존 사용액 확인 필요)
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[10.5px] text-slate-600 mb-3.5 leading-relaxed">
+          구간은 10년 단위 준비 일정이라 나이 구간과 딱 맞지 않을 수 있어요. 신혼집은 증여 한도만으로는 부족한 규모라 별도 저축·청약·대출 계획이 필요합니다. 5년마다 이 표의 금액을 새로 점검하세요.
         </p>
 
-        {/* 자금 대응 전략 체크리스트 (017~018.jpeg 완벽 재현) */}
+        {/* 자금 대응 전략 체크리스트 */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-1.5">
           자금 대응 전략 체크리스트
         </h3>
@@ -515,38 +500,38 @@ export function Sheet7To9PocketLumpSumAge({
           {[
             {
               id: 'strategy-1',
-              bold: `2차 구간 (만 ${periods[1]?.ageAtStart ?? 10}세에 시작, 2,000만) —`,
-              text: '이 구간에 넣은 돈으로 대학 등록금 (4년)(만 19세), 타지역 자취 보증금(만 19세)에 쓸 수 있어요. 쓸 때가 가까워지면 원금 보존 위주 운용으로 바꾸는 것을 검토',
+              bold: '필요한 날짜부터 확인 —',
+              text: '등록금·보증금이 필요한 때와 입금 일정을 비교하세요.',
             },
             {
               id: 'strategy-2',
-              bold: `3차 구간 (만 ${periods[2]?.ageAtStart ?? 20}세에 시작, 5,000만) —`,
-              text: '이 구간에 넣은 돈으로 어학연수·교환학생(만 21세), 취업 준비·자격증(만 23세)에 쓸 수 있어요. 쓸 때가 가까워지면 원금 보존 위주 운용으로 바꾸는 것을 검토',
+              bold: '입금 합계와 현재 잔액 구분 —',
+              text: '이미 쓴 돈을 다음 목표에 다시 배정하지 마세요.',
             },
             {
               id: 'strategy-3',
-              bold: `4차 구간 (만 ${periods[3]?.ageAtStart ?? 30}세에 시작, 5,000만) + 혼인·출산 공제 1억원 —`,
-              text: '이 구간에 넣은 돈으로 결혼 준비(만 32세), 신혼집 보증금·주택자금(만 32세)에 쓸 수 있어요. 쓸 때가 가까워지면 원금 보존 위주 운용으로 바꾸는 것을 검토',
+              bold: '혼인·출산 공제 —',
+              text: '미래 계획만으로 한도에 더하지 않고 실제 사건과 조건을 확인하세요.',
             },
             {
               id: 'strategy-4',
-              bold: '신혼집 자금은 증여 한도 밖 —',
-              text: '아이 본인 저축·청약통장·대출 계획이 따로 필요',
+              bold: '주거 지원은 가족 상황에 맞게 —',
+              text: '표의 2~3억원은 원본 예산 가정이며 필수 지출이나 공식 평균이 아닙니다.',
             },
             {
               id: 'strategy-5',
-              bold: `청약통장: 만 14세(${birthParsed.year + 14}년)부터 월 25만원씩 —`,
-              text: '미성년 때 납입은 민영주택 가입기간 최대 5년, 국민주택 납입 최대 60회(회차당 25만원까지) 인정, 신혼집 청약에 활용',
+              bold: '청약을 준비할 때 —',
+              text: '가입기간·납입 인정액은 그 시점의 청약홈·은행 안내를 확인하세요.',
             },
             {
               id: 'strategy-6',
-              bold: '청약 제도는 바뀔 수 있어요 —',
-              text: `만 13세쯤(${birthParsed.year + 13}년) 최신 납입 인정 기준을 청약홈·은행에서 다시 확인하고 가입하기. 통장은 미리 열어 둬도 되지만, 미성년 인정 한도(5년·60회)를 넘는 기간은 인정되지 않을 수 있어요`,
+              bold: '과거 증여 내역 확인 —',
+              text: '부모·조부모에게 받은 돈과 신고 내용을 함께 확인하세요.',
             },
             {
               id: 'strategy-7',
-              bold: '물가·결혼 비용은 일반 물가보다 빠르게 오르는 편 —',
-              text: '5년마다 이 표 금액을 새로 점검',
+              bold: '비용 계획 다시 점검 —',
+              text: '참고 가격과 가족의 지원 계획을 정기적으로 갱신하세요.',
             },
           ].map((item) => (
             <div
@@ -554,7 +539,7 @@ export function Sheet7To9PocketLumpSumAge({
               onClick={() => onToggleCheck(item.id)}
               className="flex items-start gap-2.5 px-2.5 py-1.5 hover:bg-slate-50 cursor-pointer"
             >
-              <div className="pt-0.5">
+              <div className="pt-0.5 shrink-0">
                 <SquareCheckbox
                   size="sm"
                   checked={!!checkedMap[item.id]}
@@ -573,74 +558,78 @@ export function Sheet7To9PocketLumpSumAge({
 
       {/* ==================== 시트 9: 나이·연도표 (만 0세 ~ 만 35세) ==================== */}
       <section id="sheet-9" className="a4-sheet">
-        <div className="flex items-center justify-between border-b-2 border-slate-800 pb-2 mb-1.5">
-          <div className="flex items-center gap-2">
-            <span className="inline-block bg-lime-200 border border-lime-400 px-2 py-0.5 text-xs font-extrabold text-slate-900 rounded-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-800 pb-2 mb-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block bg-lime-200 border border-lime-400 px-2 py-0.5 text-xs font-extrabold text-slate-900 rounded-xs shrink-0">
               {childName || '우리아이'}
             </span>
-            <h2 className="text-lg font-extrabold tracking-tight text-slate-900">
+            <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900">
               나이 · 연도표
             </h2>
           </div>
 
-          {blessingMessage && (
-            <div className="text-center font-serif italic font-bold text-slate-800 text-sm sm:text-base px-3 py-0.5 bg-amber-50/70 border border-amber-200 rounded">
-              “{blessingMessage}”
-            </div>
-          )}
-
-          <span className="text-[10px] text-slate-400 font-medium">
+          <span className="text-[10px] text-slate-400 font-medium shrink-0">
             Sheet 09 · 만 35세 나이·학교·증여구간표
           </span>
         </div>
 
-        <p className="text-[10.5px] text-slate-600 mb-2">
+        {blessingMessage && (
+          <div className="text-center font-serif italic font-bold text-slate-800 text-xs sm:text-sm px-3 py-1.5 mb-2 bg-amber-50/70 border border-amber-200 rounded">
+            “{blessingMessage}”
+          </div>
+        )}
+
+        <p className="text-[10.5px] text-slate-600 mb-2 leading-relaxed">
           {birthFormatted}생 · 생일이 지나야 만 나이가 올라가요. 학교는 그 해 3월 기준으로 계산했고, 학교 입학 시기는 개인마다 다를 수 있어요.
         </p>
 
-        <table className="sheet-table text-center text-[10.5px] leading-tight">
-          <thead>
-            <tr>
-              <th className="w-20 py-1">만 나이</th>
-              <th className="w-20 py-1">연도</th>
-              <th className="w-28 py-1">그날(생일)</th>
-              <th className="w-36 py-1">그 해 학교</th>
-              <th className="text-left pl-3 py-1">증여 구간</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ageYearRows.map((row) => (
-              <tr
-                key={row.age}
-                className={
-                  row.isPeriodStart
-                    ? 'bg-sky-50/80 font-bold'
-                    : row.isCurrentAge
-                    ? 'bg-yellow-50/60'
-                    : ''
-                }
-              >
-                <td className="font-bold py-[2.5px] bg-slate-50/70">
-                  만 {row.age}세{row.isCurrentAge ? ' (지금)' : ''}
-                </td>
-                <td className="py-[2.5px]">{row.year}년</td>
-                <td className="py-[2.5px] text-slate-700">{row.birthdayStr}</td>
-                <td className="py-[2.5px] font-medium text-slate-800">
-                  {row.schoolLabel}
-                </td>
-                <td
-                  className={`py-[2.5px] text-left pl-3 ${
-                    row.isPeriodStart
-                      ? 'font-extrabold text-slate-950'
-                      : 'text-slate-700'
-                  }`}
-                >
-                  {row.giftStatusLabel}
-                </td>
+        <div className="table-scroll-wrap">
+          <table className="sheet-table text-center text-[10px] sm:text-[10.5px] leading-tight">
+            <thead>
+              <tr>
+                <th className="w-16 sm:w-20 py-1">만 나이</th>
+                <th className="w-14 sm:w-20 py-1">연도</th>
+                <th className="w-20 sm:w-28 py-1">그날(생일)</th>
+                <th className="w-24 sm:w-36 py-1">그 해 학교</th>
+                <th className="text-left pl-2 sm:pl-3 py-1">증여 구간</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {ageYearRows.map((row) => (
+                <tr
+                  key={row.age}
+                  className={
+                    row.isPeriodStart
+                      ? 'bg-sky-50/80 font-bold'
+                      : row.isCurrentAge
+                      ? 'bg-yellow-50/60'
+                      : ''
+                  }
+                >
+                  <td className="font-bold py-[2.5px] bg-slate-50/70 whitespace-nowrap">
+                    만 {row.age}세{row.isCurrentAge ? ' (지금)' : ''}
+                  </td>
+                  <td className="py-[2.5px] whitespace-nowrap">{row.year}년</td>
+                  <td className="py-[2.5px] text-slate-700 whitespace-nowrap">
+                    {row.birthdayStr}
+                  </td>
+                  <td className="py-[2.5px] font-medium text-slate-800 whitespace-nowrap">
+                    {row.schoolLabel}
+                  </td>
+                  <td
+                    className={`py-[2.5px] text-left pl-2 sm:pl-3 whitespace-nowrap ${
+                      row.isPeriodStart
+                        ? 'font-extrabold text-slate-950'
+                        : 'text-slate-700'
+                    }`}
+                  >
+                    {row.giftStatusLabel}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </>
   );

@@ -5,6 +5,7 @@ export interface PlannerInput {
   blessingMessage: string; // 응원 문구 (예: "귀한아들, 귀하게 커라 사랑한다")
   birthDate: string; // 생년월일 YYYY-MM-DD (예: "2026-06-23")
   startDate: string; // 첫 증여 시작 예정일 YYYY-MM-DD (예: "2026-10-25")
+  monthlyGiftWon: number; // 가족이 정한 계획액, 공제 최대액 아님
   inflationRate: number; // 연간 물가상승률 % (예: 2.5)
 }
 
@@ -19,10 +20,7 @@ export interface GiftPeriod {
   isMinor: boolean; // 만 19세 미만 여부
   deductionLimitManwon: number; // 2000 또는 5000 (만원 단위)
   deductionLabel: string; // "미성년 2,000만" | "성년 5,000만"
-  monthlyMaxExact: number; // 계산상 최대 월 증여액 (195,384원 / 488,460원)
-  monthlyRecommended: number; // 실무 권장 월 증여액 (195,000원 / 488,000원)
-  evaluatedAmountManwon: number; // 정기금 평가액 (만원 단위, 소수 첫째자리: 1996.1 / 4995.3)
-  remainingLimitManwon: number; // 잔여 한도 (만원 단위, 소수 첫째자리: 3.9 / 4.7)
+  monthlyPlanned: number; // 가족이 정한 월 계획액
   lumpSumMaxLabel: string; // "2,000만원" | "5,000만원"
   reportDeadline: string; // 신고 마감일 "2027.01.31"
 }
@@ -53,7 +51,7 @@ export interface MonthlyCheckRow {
 export interface LumpSumExpenseItem {
   id: string;
   title: string;
-  requiredOrOptional: '필수' | '선택';
+  requiredOrOptional: '선택' | '선택';
   timingAgeLabel: string; // "만 19~22세"
   timingYearLabel: string; // "2045~2048년"
   reason: string;
@@ -71,12 +69,8 @@ export interface AgeYearRow {
   isPeriodStart: boolean;
 }
 
-// 세법상 유기정기금 연 3% 복리 할인 계수 (10년 = 8.5302028368)
-const ANNUITY_PV_FACTOR_10Y =
-  Array.from({ length: 10 }, (_, i) => 1 / Math.pow(1.03, i + 1)).reduce(
-    (acc, v) => acc + v,
-    0
-  ) * 12; // 약 102.36243404
+// 정기금 할인 최대액은 개별 계약 평가 검증 전 제공하지 않습니다.
+export const COST_BASE_YEAR = 2026;
 
 /**
  * YYYY-MM-DD 문자열을 연, 월, 일 숫자로 파싱합니다.
@@ -155,13 +149,15 @@ export function getReportDeadline(startYear: number, startMonth: number): string
   const deadlineYear = Math.floor(totalMonths / 12);
   const deadlineMonth = (totalMonths % 12) + 1;
   const deadlineDay = getLastDayOfMonth(deadlineYear, deadlineMonth);
-  return formatDotYMD(deadlineYear, deadlineMonth, deadlineDay);
+  const date = new Date(deadlineYear, deadlineMonth - 1, deadlineDay);
+  while ([0, 6].includes(date.getDay())) date.setDate(date.getDate() + 1);
+  return `${formatDotYMD(date.getFullYear(), date.getMonth() + 1, date.getDate())} (잠정)`;
 }
 
 /**
  * 만 35세까지의 10년 단위 증여 구간 목록을 생성합니다.
  */
-export function calculateGiftPeriods(birthDateStr: string, startDateStr: string): GiftPeriod[] {
+export function calculateGiftPeriods(birthDateStr: string, startDateStr: string, monthlyGiftWon = 200000): GiftPeriod[] {
   const start = parseYMD(startDateStr);
   const periods: GiftPeriod[] = [];
 
@@ -179,14 +175,7 @@ export function calculateGiftPeriods(birthDateStr: string, startDateStr: string)
 
     const isMinor = ageAtStart < 19;
     const deductionLimitManwon = isMinor ? 2000 : 5000;
-    const deductionWon = deductionLimitManwon * 10000;
-    const monthlyMaxExact = Math.floor(deductionWon / ANNUITY_PV_FACTOR_10Y);
-    // 천원 단위 내림 (195,000원 / 488,000원)
-    const monthlyRecommended = Math.floor(monthlyMaxExact / 1000) * 1000;
-    const evaluatedWon = monthlyRecommended * ANNUITY_PV_FACTOR_10Y;
-    const evaluatedAmountManwon = Math.round((evaluatedWon / 10000) * 10) / 10;
-    const remainingLimitManwon =
-      Math.round((deductionLimitManwon - evaluatedAmountManwon) * 10) / 10;
+    const monthlyPlanned = Number.isFinite(monthlyGiftWon) ? Math.max(0, Math.floor(monthlyGiftWon)) : 0;
 
     const endInfo = getContractEndDate(pYear, start.month, pDay);
     const reportDeadline = getReportDeadline(pYear, start.month);
@@ -202,10 +191,7 @@ export function calculateGiftPeriods(birthDateStr: string, startDateStr: string)
       isMinor,
       deductionLimitManwon,
       deductionLabel: isMinor ? '미성년 2,000만' : '성년 5,000만',
-      monthlyMaxExact,
-      monthlyRecommended,
-      evaluatedAmountManwon,
-      remainingLimitManwon,
+      monthlyPlanned,
       lumpSumMaxLabel: isMinor ? '2,000만원' : '5,000만원',
       reportDeadline,
     });
@@ -231,7 +217,7 @@ export function generateCalendarTodos(periods: GiftPeriod[]): CalendarTodoItem[]
     items.push({
       id: `period-${p.periodNumber}-report`,
       date: p.reportDeadline,
-      description: `${p.label} 신고 마감 (홈택스 유기정기금)`,
+      description: `${p.label} 신고기한 확인 (주말 보정, 공휴일·근로자의 날 별도 확인)`,
       periodNumber: p.periodNumber,
     });
 
@@ -257,7 +243,7 @@ export function generateCalendarTodos(periods: GiftPeriod[]): CalendarTodoItem[]
     id: 'marriage-childbirth-special',
     date: '혼인·출산 시',
     description:
-      '혼인신고일 전후 2년 / 출생일부터 2년 안에 증여하면 1억원 별도 공제. 증여 후 3개월 내 신고',
+      '거주자가 직계존속에게 받는 혼인·출산 증여는 요건 충족 시 통합 1억원 추가 공제. 출산은 받는 사람의 자녀 출생. 신고는 증여한 달 말일부터 3개월 기준으로 확인',
   });
 
   return items;
@@ -310,7 +296,7 @@ export function generateChildAllowanceSchedule(birthDateStr: string): {
   const birth = parseYMD(birthDateStr);
   const startTotalMonth = birth.year * 12 + (birth.month - 1);
   // 출생월부터 156개월 (만 13세 생일 전월까지)
-  const endTotalMonth = startTotalMonth + 155;
+  const endTotalMonth = startTotalMonth + (birth.year >= 2017 ? 155 : 95);
   const endYear = Math.floor(endTotalMonth / 12);
   const endMonth = (endTotalMonth % 12) + 1;
 
@@ -335,7 +321,7 @@ export function generateChildAllowanceSchedule(birthDateStr: string): {
   return {
     startYmLabel: `${birth.year}.${String(birth.month).padStart(2, '0')}`,
     endYmLabel: `${endYear}.${String(endMonth).padStart(2, '0')}`,
-    totalCount: 156,
+    totalCount: endTotalMonth - startTotalMonth + 1,
     rows,
   };
 }
@@ -364,7 +350,7 @@ export function generateInstallmentSchedule(firstPeriod: GiftPeriod): MonthlyChe
       year: y,
       activeMonths,
       count,
-      annualAmount: count * firstPeriod.monthlyRecommended,
+      annualAmount: count * firstPeriod.monthlyPlanned,
     });
   }
 
@@ -387,7 +373,7 @@ export function formatManwonReadable(manwon: number): string {
 
 /**
  * 시트 8: 자녀 목돈 필요 시기 체크리스트 (현재가 및 물가상승 반영 예상 금액)
- * 캡처본(ttukko_lab)의 복리 물가 계산식 완벽 재현
+ * 2026년 기준 가격을 지급 연도별로 상승시킨 계획 시나리오
  */
 export function calculateLumpSumExpenses(
   birthDateStr: string,
@@ -395,30 +381,20 @@ export function calculateLumpSumExpenses(
   inflationRate: number
 ): LumpSumExpenseItem[] {
   const birth = parseYMD(birthDateStr);
-  const start = parseYMD(startDateStr);
+  void startDateStr; // 증여일은 비용의 기준일이 아닙니다.
   const r = inflationRate / 100;
 
-  // 기준 시점(첫 증여 예정일/현재)으로부터 생일까지의 연수 오프셋 계산
-  // 캡처본의 정밀 복리 지수(예: 2026.06.23생, 2026.10 기준 만 19세까지 약 18.6878년)를 반영
-  const birthDateObj = new Date(birth.year, birth.month - 1, birth.day);
-  const startDateObj = new Date(start.year, start.month - 1, start.day);
-  // 캡처본과 1원 단위까지 동일하도록 시작일 기준 연수 차이 계산 (보정치 10일 반영)
-  const diffDaysFromBirthToStart =
-    (startDateObj.getTime() - birthDateObj.getTime()) / (1000 * 60 * 60 * 24) - 10;
-  const ageOffsetYears = diffDaysFromBirthToStart / 365.25;
-
-  const getMultiplierForAge = (targetAge: number): number => {
-    const yearsFromNow = Math.max(0, targetAge - ageOffsetYears);
-    return Math.pow(1 + r, yearsFromNow);
-  };
+  // 기준연도 2026년 가격을 지급 연도까지 연 단위로 계산합니다.
+  const getMultiplierForAge = (targetAge: number): number =>
+    Math.pow(1 + r, Math.max(0, birth.year + targetAge - COST_BASE_YEAR));
 
   // 1. 대학 등록금 (4년): 만 19, 20, 21, 22세 4개년 각각 물가 반영 후 합산
   const univMultipliers = [19, 20, 21, 22].map(getMultiplierForAge);
   const univAvgMultiplier =
     univMultipliers.reduce((a, b) => a + b, 0) / univMultipliers.length;
 
-  const univAvgFuture = Math.round(2908 * univAvgMultiplier);
-  const univPrivateFuture = Math.round(3293 * univAvgMultiplier);
+  const univAvgFuture = Math.round(2908.12 * univAvgMultiplier);
+  const univPrivateFuture = Math.round(3292.6 * univAvgMultiplier);
   const univPublicFuture = Math.round(1700 * univAvgMultiplier);
 
   // 2. 타지역 자취 보증금 (만 19세)
@@ -454,7 +430,7 @@ export function calculateLumpSumExpenses(
     {
       id: 'univ-tuition',
       title: '대학 등록금 (4년)',
-      requiredOrOptional: '필수',
+      requiredOrOptional: '선택',
       timingAgeLabel: '만 19~22세',
       timingYearLabel: `${y19}~${y22}년`,
       reason: '4년제 학비. 2026학년도 4년제 평균 연 727만원',
@@ -471,7 +447,7 @@ export function calculateLumpSumExpenses(
       requiredOrOptional: '선택',
       timingAgeLabel: '대학 입학과 동시\n만 19세',
       timingYearLabel: `${y19}년`,
-      reason: '통학이 어려운 지역으로 진학할 때 전월세 보증금',
+      reason: '전월세 보증금 · 원본 예시 범위, 공식 평균 아님',
       presentValueLines: ['500만원 ~', '2,000만원'],
       futureValueLines: [
         `${formatManwonReadable(dormMinFuture)} ~ ${formatManwonReadable(dormMaxFuture)}`,
@@ -483,7 +459,7 @@ export function calculateLumpSumExpenses(
       requiredOrOptional: '선택',
       timingAgeLabel: '대학 재학 중\n만 20~22세',
       timingYearLabel: `${y20}~${y22}년`,
-      reason: '본인이 원할 때',
+      reason: '본인이 원할 때 · 원본 예시 범위, 국가·기간에 따라 다름',
       presentValueLines: ['1,000만원 ~', '3,000만원'],
       futureValueLines: [
         `${formatManwonReadable(studyMinFuture)} ~ ${formatManwonReadable(studyMaxFuture)}`,
@@ -492,10 +468,10 @@ export function calculateLumpSumExpenses(
     {
       id: 'job-prep',
       title: '취업 준비·자격증',
-      requiredOrOptional: '필수',
+      requiredOrOptional: '선택',
       timingAgeLabel: '만 22~24세',
       timingYearLabel: `${y22}~${y24}년`,
-      reason: '졸업 전후 소액이 계속 나감',
+      reason: '졸업 전후 지원 · 원본 예시 범위, 공식 평균 아님',
       presentValueLines: ['100만원 ~ 500만원'],
       futureValueLines: [
         `${formatManwonReadable(jobMinFuture)} ~ ${formatManwonReadable(jobMaxFuture)}`,
@@ -504,20 +480,20 @@ export function calculateLumpSumExpenses(
     {
       id: 'wedding-prep',
       title: '결혼 준비',
-      requiredOrOptional: '필수',
+      requiredOrOptional: '선택',
       timingAgeLabel: '만 32세',
       timingYearLabel: `${y32}년`,
-      reason: '2024년 조사 기준 신혼집 제외 평균 6,298만원',
+      reason: '원본 예시 6,298만원 · 공식 평균 검증 전, 2026년 계획 가정으로만 사용',
       presentValueLines: ['6,298만원'],
       futureValueLines: [formatManwonReadable(weddingFuture)],
     },
     {
       id: 'newlywed-house',
       title: '신혼집 보증금·\n주택자금',
-      requiredOrOptional: '필수',
+      requiredOrOptional: '선택',
       timingAgeLabel: '결혼과 동시\n만 32세',
       timingYearLabel: `${y32}년`,
-      reason: '신혼집까지 합치면 결혼 비용이 약 3억원 — 가장 큰 목돈',
+      reason: '가족 주거지원 가정 · 원본 예시 2~3억원, 공식 평균 아님',
       presentValueLines: ['2억원 ~ 3억원'],
       futureValueLines: [
         `${formatManwonReadable(houseMinFuture)} ~`,
