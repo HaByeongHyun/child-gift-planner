@@ -140,6 +140,11 @@ body {
     overflow: visible !important;
   }
 
+  .sheet-table {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
   .a4-sheet {
     box-shadow: none !important;
     border: none !important;

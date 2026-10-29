@@ -4,12 +4,14 @@ import React from 'react';
 import {
   GiftPeriod,
   LumpSumExpenseItem,
+  ExpenseItemOverride,
   AgeYearRow,
   parseYMD,
   formatDotYMD,
+  matchLumpSumItemsToPeriod,
 } from '@/lib/calculator';
 import { SquareCheckbox } from '@/components/SquareCheckbox';
-import { Plus, Trash2, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Sparkles, RotateCcw } from 'lucide-react';
 
 export interface PocketMoneyRecord {
   id: string;
@@ -42,6 +44,12 @@ interface Sheet7To9Props {
   onLoadSamplePocketRecords: () => void;
   checkedMap: Record<string, boolean>;
   onToggleCheck: (id: string) => void;
+  onUpdateExpenseOverride: (
+    itemId: string,
+    patch: Partial<ExpenseItemOverride>
+  ) => void;
+  onResetExpenseOverrides: () => void;
+  hasCustomExpenseOverrides: boolean;
 }
 
 export function Sheet7To9PocketLumpSumAge({
@@ -59,6 +67,9 @@ export function Sheet7To9PocketLumpSumAge({
   onLoadSamplePocketRecords,
   checkedMap,
   onToggleCheck,
+  onUpdateExpenseOverride,
+  onResetExpenseOverrides,
+  hasCustomExpenseOverrides,
 }: Sheet7To9Props) {
   const firstPeriod = periods[0];
   const birthParsed = parseYMD(birthDate);
@@ -74,16 +85,17 @@ export function Sheet7To9PocketLumpSumAge({
     (_, i) => firstPeriod.startYear + i
   );
 
-  // 연도별 증여 해당(O) 합계 계산
+  // 연도별 증여 해당(O) 합계 계산 (시작일을 바꿔도 전체 실제 기록 누적합은 보존)
   const yearlyTaxableTotals: Record<number, number> = {};
-  let cumulativeTaxableTotal = 0;
   period1Years.forEach((y) => {
     const sum = pocketRecords
       .filter((r) => r.year === y && r.isGiftTaxable === 'O')
       .reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
     yearlyTaxableTotals[y] = sum;
-    cumulativeTaxableTotal += sum;
   });
+  const cumulativeTaxableTotal = pocketRecords
+    .filter((r) => r.isGiftTaxable === 'O')
+    .reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
 
   // 인쇄 시 총 16행이 보이도록 빈 줄 채움
   const blankRowCount = Math.max(0, 16 - pocketRecords.length);
@@ -108,7 +120,7 @@ export function Sheet7To9PocketLumpSumAge({
               className="no-print inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 font-semibold transition-colors cursor-pointer"
             >
               <Sparkles className="w-3 h-3" />
-              예시 따로 보기
+              예시 보기 (저장 안 됨)
             </button>
             <button
               type="button"
@@ -123,28 +135,29 @@ export function Sheet7To9PocketLumpSumAge({
           </div>
         </div>
 
-        <div className="border border-slate-400 p-2.5 sm:p-3 text-[11.5px] sm:text-xs leading-relaxed mb-3">
-          받은 날짜·사람·금액·사용 목적과 신고 내역을 함께 적으세요. 현금이나 용돈통장에 보관한다고 자동으로 비과세가 되는 것은 아닙니다. 생활비·교육비 비과세는 사용 목적 등 요건을 확인해야 합니다. 증여 여부는 기본 ‘미확인’으로 두고 확인한 경우에만 선택하세요. 남은 공제액은 여기서 계산하지 않습니다.
+        <div className="border border-slate-400 bg-slate-50/60 p-2.5 sm:p-3 text-[11.5px] sm:text-xs leading-relaxed mb-3 text-slate-800">
+          <strong className="font-bold">작성 원칙:</strong> 받은 날짜·연도·준 사람·금액·보관처와 사용 목적을 함께 적으세요. 현금이나 용돈통장에 보관한다는 이유만으로 자동 비과세가 되지 않으며, 증권계좌에 넣었다고 무조건 과세되는 것도 아닙니다. 증여 해당 여부는 기본 <strong className="font-semibold">‘미확인’</strong>으로 두고, 세무 요건을 확인한 경우에만 직접 <strong className="font-semibold">O(증여 합산)</strong> 또는 <strong className="font-semibold">X(비과세 확인)</strong>를 선택하세요.
         </div>
 
         <div className="sm:hidden text-right text-[10px] text-slate-400 mb-1 no-print">
           ← 표를 좌우로 밀어서 입력/확인하세요 →
         </div>
         <div className="table-scroll-wrap mb-2">
-          <table className="sheet-table sheet-table-compact text-center min-w-[540px]">
+          <table className="sheet-table sheet-table-compact text-center min-w-[580px]">
             <thead>
               <tr>
+                <th className="w-14">연도</th>
                 <th className="w-14">날짜</th>
-                <th className="w-26">준 사람</th>
+                <th className="w-24">준 사람</th>
                 <th className="w-18">관계</th>
                 <th className="w-24">금액</th>
-                <th className="w-22">어디에 넣었나</th>
-                <th className="w-16">
+                <th className="w-22">보관 계좌·장소</th>
+                <th className="w-18">
                   증여
                   <br />
                   해당
                 </th>
-                <th>메모</th>
+                <th>메모 (사용 목적·신고 여부)</th>
                 <th className="w-8 no-print">삭제</th>
               </tr>
             </thead>
@@ -153,12 +166,28 @@ export function Sheet7To9PocketLumpSumAge({
                 <tr key={rec.id}>
                   <td className="p-0">
                     <input
+                      type="number"
+                      value={rec.year || ''}
+                      onChange={(e) =>
+                        onUpdatePocketRecord(
+                          rec.id,
+                          'year',
+                          Number(e.target.value) || firstPeriod.startYear
+                        )
+                      }
+                      aria-label="용돈 수령 연도"
+                      className="w-full px-1 py-1 text-center text-[11px] bg-transparent focus:outline-none focus:bg-yellow-50"
+                    />
+                  </td>
+                  <td className="p-0">
+                    <input
                       type="text"
                       value={rec.date}
                       onChange={(e) =>
                         onUpdatePocketRecord(rec.id, 'date', e.target.value)
                       }
                       placeholder="9/26"
+                      aria-label="용돈 수령 날짜"
                       className="w-full px-1 py-1 text-center text-[11px] bg-transparent focus:outline-none focus:bg-yellow-50"
                     />
                   </td>
@@ -170,6 +199,7 @@ export function Sheet7To9PocketLumpSumAge({
                         onUpdatePocketRecord(rec.id, 'giver', e.target.value)
                       }
                       placeholder="수원친정"
+                      aria-label="준 사람"
                       className="w-full px-1.5 py-1 text-center text-[11px] font-medium bg-transparent focus:outline-none focus:bg-yellow-50"
                     />
                   </td>
@@ -181,6 +211,7 @@ export function Sheet7To9PocketLumpSumAge({
                         onUpdatePocketRecord(rec.id, 'relation', e.target.value)
                       }
                       placeholder="조부모"
+                      aria-label="관계"
                       className="w-full px-1 py-1 text-center text-[11px] bg-transparent focus:outline-none focus:bg-yellow-50"
                     />
                   </td>
@@ -197,6 +228,7 @@ export function Sheet7To9PocketLumpSumAge({
                         onUpdatePocketRecord(rec.id, 'amount', numeric);
                       }}
                       placeholder="100,000원"
+                      aria-label="용돈 금액"
                       className="w-full px-1.5 py-1 text-right text-[11px] font-semibold bg-transparent focus:outline-none focus:bg-yellow-50"
                     />
                   </td>
@@ -206,6 +238,7 @@ export function Sheet7To9PocketLumpSumAge({
                       onChange={(e) =>
                         onUpdatePocketRecord(rec.id, 'whereKept', e.target.value)
                       }
+                      aria-label="보관 계좌 또는 장소"
                       className="w-full px-1 py-1 text-center text-[11px] bg-transparent focus:outline-none"
                     >
                       <option value="">선택</option>
@@ -224,6 +257,7 @@ export function Sheet7To9PocketLumpSumAge({
                           e.target.value
                         )
                       }
+                      aria-label="증여 해당 여부"
                       className="w-full px-1 py-1 text-center text-[11px] font-bold bg-transparent focus:outline-none"
                     >
                       <option value="">미확인</option>
@@ -239,6 +273,7 @@ export function Sheet7To9PocketLumpSumAge({
                         onUpdatePocketRecord(rec.id, 'memo', e.target.value)
                       }
                       placeholder=""
+                      aria-label="용돈 메모"
                       className="w-full px-1.5 py-1 text-left text-[11px] bg-transparent focus:outline-none focus:bg-yellow-50"
                     />
                   </td>
@@ -248,6 +283,7 @@ export function Sheet7To9PocketLumpSumAge({
                       onClick={() => onRemovePocketRecord(rec.id)}
                       className="text-slate-400 hover:text-red-600 p-0.5 cursor-pointer"
                       title="행 삭제"
+                      aria-label="행 삭제"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -263,6 +299,7 @@ export function Sheet7To9PocketLumpSumAge({
                   <td></td>
                   <td></td>
                   <td></td>
+                  <td></td>
                   <td className="no-print"></td>
                 </tr>
               ))}
@@ -271,13 +308,13 @@ export function Sheet7To9PocketLumpSumAge({
         </div>
 
         <p className="text-[10.5px] text-slate-600 mb-2 leading-relaxed">
-          <strong className="font-semibold">어디에 넣었나</strong> — 현금 / 용돈통장 / 증권계좌 &nbsp;|&nbsp;{' '}
-          <strong className="font-semibold">증여 해당</strong> — 미확인 / X(비과세 확인) / O(증여 확인). 계좌 종류로 자동 판정하지 않음
+          <strong className="font-semibold">보관 계좌·장소</strong> — 현금 / 용돈통장 / 증권계좌 &nbsp;|&nbsp;{' '}
+          <strong className="font-semibold">증여 해당</strong> — 미확인(기본) / X(사회통념상 비과세 확인) / O(증여 합산 확인). 보관 계좌만으로 자동 판정하지 않습니다.
         </p>
 
         {/* 연도별 합계 (증여 해당 O 만 집계) */}
         <h3 className="text-xs font-extrabold text-slate-900 mb-1.5">
-          연도별 합계 (증여 해당 O 만 집계)
+          연도별 합계 (내가 ‘증여 해당 O’로 표시한 금액만 집계)
         </h3>
         <div className="table-scroll-wrap mb-2">
           <table className="sheet-table sheet-table-compact text-center min-w-[480px]">
@@ -286,7 +323,7 @@ export function Sheet7To9PocketLumpSumAge({
                 {period1Years.map((y) => (
                   <th key={y}>{y}</th>
                 ))}
-                <th className="bg-slate-200">누적</th>
+                <th className="bg-slate-200">전체 O 누적</th>
               </tr>
             </thead>
             <tbody>
@@ -309,7 +346,7 @@ export function Sheet7To9PocketLumpSumAge({
         </div>
 
         <p className="text-[10.5px] text-slate-600 leading-relaxed">
-          부모·조부모의 일반 공제 사용액은 함께 확인합니다. 이 기록의 O 합계는 확인 표시한 금액의 합계일 뿐 개인별 남은 공제액이나 납부세액을 뜻하지 않습니다.
+          직계존속(부모·조부모)에게 받은 증여는 합산해 10년 공제 한도를 확인합니다. 위 표는 ‘O’로 직접 선택한 기록의 단순 합계이며, 남은 공제 한도나 납부세액을 자동 확정하지 않습니다.
         </p>
       </section>
 
@@ -324,65 +361,126 @@ export function Sheet7To9PocketLumpSumAge({
               자녀 목돈 필요 시기 체크리스트
             </h2>
           </div>
-          <span className="text-[10px] text-slate-400 font-medium shrink-0">
-            Sheet 08 · 목돈 시점 & 자금 대응 전략
-          </span>
+          <div className="flex items-center gap-2">
+            {hasCustomExpenseOverrides && (
+              <button
+                type="button"
+                onClick={onResetExpenseOverrides}
+                className="no-print inline-flex items-center gap-1 text-[10.5px] px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                시기·지원액 기본값 복원
+              </button>
+            )}
+            <span className="text-[10px] text-slate-400 font-medium shrink-0">
+              Sheet 08 · 목돈 시점 & 가족 지원 계획
+            </span>
+          </div>
         </div>
 
         <p className="text-[11px] text-slate-700 leading-relaxed mb-2">
-          {birthFormatted}생 · 금액은 지금 가격(현재가) 기준이고, 오른쪽에{' '}
-          <strong className="font-bold">물가상승률 {inflationRate}%</strong>를 반영한 금액을 같이 적었습니다. 준비가 끝난 항목은 □에 체크하세요.
+          {birthFormatted}생 · 기준연도는 <strong className="font-bold">2026년</strong>(증여 시작일과 무관)이며, 오른쪽에 <strong className="font-bold">연 {inflationRate}% 물가상승률</strong>을 반영한 예상 금액을 함께 표시합니다. <strong className="font-bold">전체 참고 비용</strong>과 <strong className="font-bold">우리 가족 지원 계획액</strong>을 구분했으며, 결혼 나이·지원 여부·지원 금액을 가족 상황에 맞게 직접 수정할 수 있습니다.
         </p>
 
         <div className="sm:hidden text-right text-[10px] text-slate-400 mb-1 no-print">
-          ← 좌우로 밀어서 물가 반영 금액을 확인하세요 →
+          ← 좌우로 밀어서 전체 참고 비용과 가족 지원 계획액을 확인·수정하세요 →
         </div>
         <div className="table-scroll-wrap mb-2">
-          <table className="sheet-table sheet-table-compact min-w-[540px]">
+          <table className="sheet-table sheet-table-compact min-w-[640px]">
             <thead>
               <tr className="text-center">
-                <th className="w-24">항목</th>
-                <th className="w-11">
-                  필수/
+                <th className="w-26">항목 · 출처 구분</th>
+                <th className="w-22">
+                  예상 시점
                   <br />
-                  선택
+                  <span className="text-[9.5px] font-normal">(만 나이 수정)</span>
                 </th>
-                <th className="w-22">시점</th>
-                <th>이유</th>
-                <th className="w-28">
-                  예상 금액
+                <th>기준 설명 및 가정 조건</th>
+                <th className="w-26">
+                  전체 참고 비용
                   <br />
-                  <span className="text-[10px] font-normal">현재가</span>
+                  <span className="text-[9.5px] font-normal">2026년 기준 참고</span>
+                </th>
+                <th className="w-28">
+                  참고 비용 물가반영
+                  <br />
+                  <span className="text-[9.5px] font-normal">
+                    연 {inflationRate}% 가정
+                  </span>
                 </th>
                 <th className="w-32">
-                  물가 반영
+                  우리 가족 지원 계획
                   <br />
-                  <span className="text-[10px] font-normal">
-                    연 {inflationRate}% 기준
-                  </span>
+                  <span className="text-[9.5px] font-normal">현재가 입력 → 물가반영</span>
                 </th>
                 <th className="w-9">준비</th>
               </tr>
             </thead>
             <tbody>
               {lumpSumItems.map((item) => (
-                <tr key={item.id}>
-                  <td className="font-bold text-slate-900 whitespace-pre-line">
-                    {item.title}
+                <tr
+                  key={item.id}
+                  className={item.included ? '' : 'opacity-55 bg-slate-50'}
+                >
+                  <td className="font-bold text-slate-900 whitespace-pre-line align-top">
+                    <div className="flex items-start justify-between gap-1">
+                      <span>{item.title}</span>
+                    </div>
+                    <div className="mt-0.5">
+                      <span
+                        className={`inline-block px-1 py-0.2 rounded text-[9px] font-semibold ${
+                          item.sourceType.startsWith('공식통계')
+                            ? 'bg-blue-100 text-blue-900'
+                            : 'bg-amber-100 text-amber-900'
+                        }`}
+                      >
+                        {item.sourceType}
+                      </span>
+                    </div>
+                    <label className="no-print mt-1 inline-flex items-center gap-1 text-[9.5px] font-medium text-slate-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={item.included}
+                        onChange={(e) =>
+                          onUpdateExpenseOverride(item.id, {
+                            included: e.target.checked,
+                          })
+                        }
+                        className="rounded border-slate-400"
+                      />
+                      {item.included ? '계획 포함' : '제외됨'}
+                    </label>
                   </td>
-                  <td className="text-center font-semibold whitespace-nowrap">
-                    {item.requiredOrOptional}
-                  </td>
-                  <td className="text-center text-[10.5px] leading-snug whitespace-nowrap">
+                  <td className="text-center text-[10.5px] leading-snug whitespace-nowrap align-middle">
                     <div className="whitespace-pre-line font-semibold">
                       {item.timingAgeLabel}
                     </div>
                     <div className="text-slate-600">{item.timingYearLabel}</div>
+                    <div className="no-print mt-1 flex items-center justify-center gap-0.5 text-[9.5px] text-slate-600">
+                      <span>시작 만</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={45}
+                        value={item.targetAge}
+                        onChange={(e) =>
+                          onUpdateExpenseOverride(item.id, {
+                            targetAge: Math.max(
+                              0,
+                              Math.min(45, Number(e.target.value) || 0)
+                            ),
+                          })
+                        }
+                        aria-label={`${item.title.replace(/\n/g, ' ')} 예상 시작 만 나이`}
+                        className="w-10 px-1 py-0.5 text-center font-bold border border-slate-300 rounded bg-white"
+                      />
+                      <span>세</span>
+                    </div>
                   </td>
-                  <td className="text-[10.5px] text-slate-700 leading-snug">
+                  <td className="text-[10.5px] text-slate-700 leading-snug align-middle">
                     {item.reason}
                   </td>
-                  <td className="text-center text-[10.5px] leading-snug whitespace-nowrap">
+                  <td className="text-center text-[10.5px] leading-snug whitespace-nowrap align-middle">
                     {item.presentValueLines.map((line, i) => (
                       <div
                         key={i}
@@ -394,7 +492,7 @@ export function Sheet7To9PocketLumpSumAge({
                       </div>
                     ))}
                   </td>
-                  <td className="text-center text-[10.5px] leading-snug bg-sky-50/40 whitespace-nowrap">
+                  <td className="text-center text-[10.5px] leading-snug bg-sky-50/40 whitespace-nowrap align-middle">
                     {item.futureValueLines.map((line, i) => (
                       <div
                         key={i}
@@ -408,7 +506,36 @@ export function Sheet7To9PocketLumpSumAge({
                       </div>
                     ))}
                   </td>
-                  <td className="text-center">
+                  <td className="text-center text-[10.5px] leading-snug bg-emerald-50/30 whitespace-nowrap align-middle">
+                    <div className="no-print flex items-center justify-center gap-0.5 mb-0.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={1000000}
+                        step={100}
+                        disabled={!item.included}
+                        value={item.familySupportManwon}
+                        onChange={(e) =>
+                          onUpdateExpenseOverride(item.id, {
+                            familySupportManwon: Math.max(
+                              0,
+                              Number(e.target.value) || 0
+                            ),
+                          })
+                        }
+                        aria-label={`${item.title.replace(/\n/g, ' ')} 가족 지원 계획액(현재가 만원)`}
+                        className="w-16 px-1 py-0.5 text-right text-[10.5px] font-bold border border-slate-300 rounded bg-white disabled:bg-slate-100"
+                      />
+                      <span className="text-[9.5px] text-slate-600">만원</span>
+                    </div>
+                    <div className="hidden print:block text-[9.5px] text-slate-600">
+                      현재가 {item.familySupportManwon.toLocaleString('ko-KR')}만원 기준
+                    </div>
+                    <div className="font-extrabold text-emerald-900">
+                      → {item.familySupportFutureLabel}
+                    </div>
+                  </td>
+                  <td className="text-center align-middle">
                     <SquareCheckbox
                       size="sm"
                       checked={!!checkedMap[`lump-${item.id}`]}
@@ -423,52 +550,53 @@ export function Sheet7To9PocketLumpSumAge({
         </div>
 
         <div className="border border-slate-400 rounded-sm bg-slate-50 px-2.5 py-2 text-[10.5px] text-slate-700 leading-relaxed mb-3.5">
-          등록금은 교육부 2026년 자료이며 그 외 금액은 원본의 가상 예산으로 공식 평균을 확인한 값이 아닙니다. 모든 입력 가격을 2026년 기준 계획값으로 두고 해당 연도까지 매년 {inflationRate}%씩 오른다고 계산했어요(등록금은 해마다 따로). 물가상승률은 위 설정에서 바꿀 수 있고(결혼은 만 32세의 선택 시나리오), 항목마다 따로 필요한 돈이라 단순히 더하지는 않았습니다.
+          • <strong className="font-semibold">대학 등록금:</strong> 교육부 2026년 대학정보공시(4년제 평균 연 727.03만원, 사립 823.15만원, 국공립 425만원) 원금을 기준으로 재학 4개년 각각 물가상승률을 반영해 합산했습니다.{' '}
+          <a
+            href="https://www.moe.go.kr/boardCnts/viewRenew.do?boardID=294&boardSeq=106020&lev=0&m=020402&s=moe"
+            target="_blank"
+            rel="noreferrer"
+            className="underline font-semibold"
+          >
+            교육부 공시 출처
+          </a>
+          <br />• <strong className="font-semibold">그 외 항목(예산 예시):</strong> 자취 보증금·어학연수·취업 준비·결혼 준비·신혼집 금액은 국가 공식 평균이나 필수 비용이 아니라 원본 바인더의 참고 예산 예시입니다. 결혼 시점과 주거 지원 여부는 선택 가능한 가정으로 두었습니다.
         </div>
 
-        {/* 증여 구간과 겹쳐보면 */}
+        {/* 증여 구간과 겹쳐보면 (실제 날짜 기준 비교) */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-1.5">
-          증여 구간과 겹쳐보면
+          증여 구간과 겹쳐보면 (구간 시작일~종료일 실제 날짜 기준)
         </h3>
         <div className="table-scroll-wrap mb-2">
           <table className="sheet-table sheet-table-compact">
             <thead>
               <tr className="text-center">
-                <th className="w-16 sm:w-20">증여 구간</th>
-                <th className="w-22 sm:w-28">시점</th>
-                <th className="w-16 sm:w-20">공제</th>
-                <th className="text-left">그 10년 안에 필요한 목돈</th>
+                <th className="w-14 sm:w-18">증여 구간</th>
+                <th className="w-28 sm:w-36">실제 계약 기간</th>
+                <th className="w-18 sm:w-22">공제 기준</th>
+                <th className="text-left">해당 날짜 구간 안에 필요한 목돈 (날짜 비교)</th>
               </tr>
             </thead>
             <tbody>
               {periods.map((p) => {
-                const neededText =
-                  lumpSumItems
-                    .filter((item) => {
-                      const years =
-                        item.timingYearLabel.match(/\d{4}/g)?.map(Number) ?? [];
-                      return (
-                        years.length > 0 &&
-                        years[0] <= p.endYear &&
-                        years[years.length - 1] >= p.startYear
-                      );
-                    })
-                    .map((item) => item.title.replace('\n', ' '))
-                    .join(', ') || '해당 시기의 예시 항목 없음';
+                const matchResult = matchLumpSumItemsToPeriod(p, lumpSumItems);
                 return (
                   <tr key={p.periodNumber} className="text-center">
                     <td className="font-bold bg-slate-50 whitespace-nowrap">
                       {p.label}
                     </td>
-                    <td className="text-[10.5px] whitespace-nowrap">
-                      <div>만 {p.ageAtStart}세</div>
-                      <div className="text-slate-600">{p.startDate}~</div>
+                    <td className="text-[10px] whitespace-nowrap leading-tight">
+                      <div className="font-semibold">
+                        {p.startDate} ~ {p.endDate}
+                      </div>
+                      <div className="text-slate-500">
+                        시작 시 만 {p.ageAtStart}세
+                      </div>
                     </td>
                     <td className="font-semibold whitespace-nowrap">
                       {p.deductionLimitManwon.toLocaleString('ko-KR')}만
                     </td>
-                    <td className="text-left font-medium text-slate-800 leading-snug">
-                      {neededText}
+                    <td className="text-left font-medium text-slate-800 leading-snug text-[10.5px]">
+                      <div>{matchResult.summaryText}</div>
                     </td>
                   </tr>
                 );
@@ -477,19 +605,19 @@ export function Sheet7To9PocketLumpSumAge({
                 <td className="font-bold bg-slate-50 whitespace-nowrap">
                   혼인·출산
                 </td>
-                <td className="text-[10.5px] whitespace-nowrap">
-                  혼인 전후 2년
+                <td className="text-[10px] whitespace-nowrap">
+                  자녀 혼인 전후 2년 /<br />자녀의 아이 출산 후 2년
                 </td>
-                <td className="font-semibold whitespace-nowrap">1억</td>
-                <td className="text-left font-medium text-slate-800 leading-snug">
-                  결혼 준비·신혼집 일부 (실제 요건·기존 사용액 확인 필요)
+                <td className="font-semibold whitespace-nowrap">통합 1억</td>
+                <td className="text-left font-medium text-slate-800 leading-snug text-[10.5px]">
+                  결혼 준비·신혼집 자금 일부 보완 가능 (실제 혼인·출산 요건 및 이전 공제 내역 확인 필요)
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
         <p className="text-[10.5px] text-slate-600 mb-3.5 leading-relaxed">
-          구간은 10년 단위 준비 일정이라 나이 구간과 딱 맞지 않을 수 있어요. 신혼집은 증여 한도만으로는 부족한 규모라 별도 저축·청약·대출 계획이 필요합니다. 5년마다 이 표의 금액을 새로 점검하세요.
+          ※ 단순 연도가 아니라 각 증여 구간의 실제 시작일~종료일({firstPeriod.startDate}~)과 목돈 필요 시기(생일 기준 만 나이 도달일)를 비교했습니다. 4년제 대학 등록금처럼 여러 해에 걸치는 비용은 두 구간에 나뉘어 걸칠 수 있으니 실제 납부 학기 날짜를 먼저 확인하세요.
         </p>
 
         {/* 자금 대응 전략 체크리스트 */}
@@ -500,38 +628,38 @@ export function Sheet7To9PocketLumpSumAge({
           {[
             {
               id: 'strategy-1',
-              bold: '필요한 날짜부터 확인 —',
-              text: '등록금·보증금이 필요한 때와 입금 일정을 비교하세요.',
+              bold: '실제 지출 날짜와 증여 구간 종료일 대조 —',
+              text: '같은 연도라도 몇 월에 돈이 필요한지 확인해 구간 만기 전에 미리 준비하세요.',
             },
             {
               id: 'strategy-2',
-              bold: '입금 합계와 현재 잔액 구분 —',
-              text: '이미 쓴 돈을 다음 목표에 다시 배정하지 마세요.',
+              bold: '누적 입금액과 현재 계좌 잔액 구분 —',
+              text: '등록금·어학연수로 이미 지출한 금액을 이후 결혼·주거 자금에 중복 계산하지 마세요.',
             },
             {
               id: 'strategy-3',
-              bold: '혼인·출산 공제 —',
-              text: '미래 계획만으로 한도에 더하지 않고 실제 사건과 조건을 확인하세요.',
+              bold: '혼인·출산 공제는 실제 요건 충족 시에만 반영 —',
+              text: '미래 가정만으로 확정 합산하지 말고, 실제 혼인신고일·출생일 기준 2년 요건을 확인하세요.',
             },
             {
               id: 'strategy-4',
-              bold: '주거 지원은 가족 상황에 맞게 —',
-              text: '표의 2~3억원은 원본 예산 가정이며 필수 지출이나 공식 평균이 아닙니다.',
+              bold: '전체 참고 비용과 우리 가족 지원 한도 분리 —',
+              text: '신혼집 2~3억원 등은 참고 예시일 뿐이며, 부모 노후자금을 해치지 않는 범위에서 지원 계획액을 설정하세요.',
             },
             {
               id: 'strategy-5',
-              bold: '청약을 준비할 때 —',
-              text: '가입기간·납입 인정액은 그 시점의 청약홈·은행 안내를 확인하세요.',
+              bold: '주택청약 통장 인정 기준 확인 —',
+              text: '청약 가입기간·납입 인정 금액은 제도 개편에 따라 달라지므로 시점별 청약홈 공고를 확인하세요.',
             },
             {
               id: 'strategy-6',
-              bold: '과거 증여 내역 확인 —',
-              text: '부모·조부모에게 받은 돈과 신고 내용을 함께 확인하세요.',
+              bold: '직계존속(부모·조부모) 과거 10년 증여 합산 점검 —',
+              text: '목돈을 추가 지원하기 전에 직전 10년 내 부모·조부모 증여 공제 사용액을 먼저 확인하세요.',
             },
             {
               id: 'strategy-7',
-              bold: '비용 계획 다시 점검 —',
-              text: '참고 가격과 가족의 지원 계획을 정기적으로 갱신하세요.',
+              bold: '3~5년 주기 물가 및 등록금 재점검 —',
+              text: '실제 물가상승률과 교육부 공시 등록금 변화에 맞춰 계획표를 주기적으로 업데이트하세요.',
             },
           ].map((item) => (
             <div
@@ -580,7 +708,7 @@ export function Sheet7To9PocketLumpSumAge({
         )}
 
         <p className="text-[10.5px] text-slate-600 mb-2 leading-relaxed">
-          {birthFormatted}생 · 생일이 지나야 만 나이가 올라가요. 학교는 그 해 3월 기준으로 계산했고, 학교 입학 시기는 개인마다 다를 수 있어요.
+          {birthFormatted}생 · 생일이 지나야 만 나이가 올라갑니다. 학교 학년은 출생연도(그 해 3월 입학 가정) 참고 기준이며, 증여 구간은 실제 시작일·종료일을 함께 표시했습니다.
         </p>
 
         <div className="table-scroll-wrap">
@@ -590,8 +718,8 @@ export function Sheet7To9PocketLumpSumAge({
                 <th className="w-16 sm:w-20 py-1">만 나이</th>
                 <th className="w-14 sm:w-20 py-1">연도</th>
                 <th className="w-20 sm:w-28 py-1">그날(생일)</th>
-                <th className="w-24 sm:w-36 py-1">그 해 학교</th>
-                <th className="text-left pl-2 sm:pl-3 py-1">증여 구간</th>
+                <th className="w-24 sm:w-36 py-1">그 해 학교(참고)</th>
+                <th className="text-left pl-2 sm:pl-3 py-1">증여 준비 구간 (시작·종료일)</th>
               </tr>
             </thead>
             <tbody>
@@ -607,7 +735,7 @@ export function Sheet7To9PocketLumpSumAge({
                   }
                 >
                   <td className="font-bold py-[2.5px] bg-slate-50/70 whitespace-nowrap">
-                    만 {row.age}세{row.isCurrentAge ? ' (지금)' : ''}
+                    만 {row.age}세{row.isCurrentAge ? ' (시작 나이)' : ''}
                   </td>
                   <td className="py-[2.5px] whitespace-nowrap">{row.year}년</td>
                   <td className="py-[2.5px] text-slate-700 whitespace-nowrap">

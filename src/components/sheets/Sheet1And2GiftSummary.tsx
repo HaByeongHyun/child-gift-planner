@@ -49,54 +49,57 @@ export function Sheet1To3GiftOverview({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 mb-3">
           <div className="min-w-0 border border-slate-400 rounded-md p-2.5 sm:p-3 bg-slate-50/70">
             <div className="text-[11px] font-semibold text-slate-600 mb-0.5">
-              일반 공제 기준액
+              1차 일반 공제 기준액
             </div>
             <div className="text-base sm:text-xl font-extrabold text-slate-900 mb-0.5 truncate">
               {firstPeriod.deductionLimitManwon.toLocaleString('ko-KR')}만원
             </div>
-            <div className="text-[10.5px] sm:text-[11px] text-slate-600">
-              {firstPeriod.isMinor ? '미성년' : '성년'} · 만 {firstPeriod.ageAtStart}세에 시작
+            <div className="text-[10.5px] sm:text-[11px] text-slate-600 leading-tight">
+              {firstPeriod.isMinor ? '미성년(만 19세 미만)' : '성년(만 19세 이상)'} · 만 {firstPeriod.ageAtStart}세 시작
             </div>
           </div>
 
           <div className="min-w-0 border border-slate-400 rounded-md p-2.5 sm:p-3 bg-slate-50/70">
             <div className="text-[11px] font-semibold text-slate-600 mb-0.5">
-              월 증여 계획액
+              가족 월 증여 계획액
             </div>
             <div className="text-base sm:text-xl font-extrabold text-slate-900 mb-0.5 truncate">
               {firstPeriod.monthlyPlanned.toLocaleString('ko-KR')}원
             </div>
             <div className="text-[10px] sm:text-[10.5px] text-slate-600 leading-tight">
-              120회 계획 · 비과세 최대액 아님
+              120회({((firstPeriod.monthlyPlanned * 120) / 10000).toLocaleString('ko-KR')}만원) · 비과세 최대액 아님
             </div>
           </div>
 
           <div className="min-w-0 border border-slate-400 rounded-md p-2.5 sm:p-3 bg-slate-50/70">
             <div className="text-[11px] font-semibold text-slate-600 mb-0.5">
-              첫 증여 신고기한 (잠정)
+              첫 증여 신고기한 {firstPeriod.isReportDeadlineConfirmed ? '(2026 공휴일 반영)' : '(잠정)'}
             </div>
             <div className="text-base sm:text-xl font-extrabold text-slate-900 mb-0.5 truncate">
               {firstPeriod.reportDeadline}
             </div>
             <div className="text-[10px] sm:text-[10.5px] text-slate-600 leading-tight">
-              시작 예정일 기준 · 이체 달 말일부터 3개월
+              증여월 말일부터 3개월 · 휴일 연장 반영
             </div>
           </div>
 
           <div className="min-w-0 border border-slate-400 rounded-md p-2.5 sm:p-3 bg-slate-50/70">
             <div className="text-[11px] font-semibold text-slate-600 mb-0.5">
-              2차 구간 시작
+              2차 준비 구간 시작
             </div>
             <div className="text-base sm:text-xl font-extrabold text-slate-900 mb-0.5 truncate">
               {secondPeriod ? secondPeriod.startDate : '-'}
             </div>
-            <div className="text-[10.5px] sm:text-[11px] text-slate-600">
-              시작일 + 10년
+            <div className="text-[10.5px] sm:text-[11px] text-slate-600 leading-tight">
+              첫 시작일 + 10년 (준비 점검일)
             </div>
           </div>
         </div>
 
-        <p className="border border-slate-400 p-3 mb-4 text-xs">표의 구간은 10년씩 나눈 준비 일정입니다. 공제가 자동으로 초기화되는 날짜가 아닙니다. 과거 증여·공제 사용 내역을 입력받지 않으므로 실제 남은 한도와 비과세 최대액은 계산하지 않습니다. 월 금액은 가족이 정한 계획액입니다.</p>
+        <p className="border border-slate-400 bg-slate-50/60 p-2.5 sm:p-3 mb-4 text-xs text-slate-800 leading-relaxed">
+          <strong className="font-bold">핵심 기준:</strong> 아래 1~4차 구간은 첫 시작일로부터 10년씩 나눈 <strong className="font-bold">가족 준비 일정</strong>이며, 고정된 날짜마다 공제 한도가 자동 초기화되지는 않습니다. 과거 증여 내역을 입력받지 않으므로 개인별 남은 공제 한도나 비과세 최대액은 산출하지 않고, 가족이 정한 월 계획액을 기준으로 일정을 정리합니다.
+        </p>
+
         {/* 증여 구간표 (만 35세까지) */}
         <div className="flex items-center justify-between mb-1.5">
           <h3 className="text-sm sm:text-base font-extrabold text-slate-900">
@@ -111,25 +114,25 @@ export function Sheet1To3GiftOverview({
             <thead>
               <tr>
                 <th className="w-11">구간</th>
-                <th className="w-22">시작일</th>
+                <th className="w-22">시작 예정일</th>
                 <th className="w-16">그때 나이</th>
                 <th className="w-24">일반 공제 기준</th>
-                <th className="w-28">계약 기간</th>
+                <th className="w-28">준비 기간 (120회)</th>
                 <th className="w-32">
-                  월 증여
+                  월 증여 계획액
                   <br />
-                  <span className="text-[10px] font-normal">예정 입금액</span>
+                  <span className="text-[10px] font-normal">(120회 합계)</span>
                 </th>
                 <th className="w-24">
-                  일시금이면
+                  10년 공제 기준액
                   <br />
-                  <span className="text-[10px] font-normal">공제 기준액 참고</span>
+                  <span className="text-[10px] font-normal">(법정 기준 참고)</span>
                 </th>
-                <th className="w-22">신고 마감</th>
+                <th className="w-24">신고기한</th>
               </tr>
             </thead>
             <tbody>
-              {periods.map((p, idx) => (
+              {periods.map((p) => (
                 <tr key={p.periodNumber}>
                   <td className="font-bold bg-slate-50 whitespace-nowrap">
                     {p.label}
@@ -144,18 +147,13 @@ export function Sheet1To3GiftOverview({
                   <td className="text-[10.5px] sm:text-[11px] leading-snug whitespace-nowrap">
                     <div className="font-bold">120개월</div>
                     <div>~ {p.endDate}</div>
-                    {idx > 0 && (
-                      <div className="text-[9.5px] text-slate-500">
-                        10년 기준 참고
-                      </div>
-                    )}
                   </td>
                   <td className="whitespace-nowrap">
-                    <div className="text-[10px] text-slate-600">
-                      가족이 정한 계획액
-                    </div>
                     <div className="text-xs sm:text-sm font-extrabold text-slate-900">
                       {p.monthlyPlanned.toLocaleString('ko-KR')}원
+                    </div>
+                    <div className="text-[10px] text-slate-600">
+                      총 {((p.monthlyPlanned * 120) / 10000).toLocaleString('ko-KR')}만원 계획
                     </div>
                   </td>
                   <td className="font-bold whitespace-nowrap">
@@ -168,27 +166,52 @@ export function Sheet1To3GiftOverview({
               ))}
               <tr>
                 <td className="font-bold bg-slate-50 whitespace-nowrap">별도</td>
-                <td className="font-semibold whitespace-nowrap">혼인·출산 시</td>
-                <td className="whitespace-nowrap">해당 시</td>
+                <td className="font-semibold whitespace-nowrap">자녀의 혼인·출산</td>
+                <td className="whitespace-nowrap">성년 이후</td>
                 <td className="font-semibold whitespace-nowrap">
-                  혼인·출산 1억
+                  통합 1억원 추가
                 </td>
-                <td>-</td>
+                <td>요건 충족 시</td>
                 <td>-</td>
                 <td className="font-bold whitespace-nowrap">1억원</td>
-                <td className="text-[11px] font-medium whitespace-nowrap">
-                  증여한 달 말일 + 3개월 (휴일 확인)
+                <td className="text-[10.5px] font-medium whitespace-nowrap">
+                  실제 증여월 말일 + 3개월
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <div className="border border-slate-400 p-3 text-xs space-y-2">
-          <p>일반 공제는 거주자가 직계존속에게 받을 때 미성년 2,000만원, 성년 5,000만원을 기준으로 해당 증여 전 10년 이내 공제 사용액을 확인합니다. 부모·조부모가 각각 별도 한도를 갖는 것은 아닙니다.</p>
-          <p>정기금 약정·신고 및 평가 조건은 별도 확인이 필요합니다. 자동이체만으로 할인 평가가 적용되지 않습니다. 이 도구는 할인 최대 월액·세액을 산출하지 않습니다.</p>
-          <p>신고 날짜는 주말만 보정한 잠정값입니다. 공휴일·대체공휴일·근로자의 날과 연장 공지를 국세청에서 확인하세요. 일반 현금 증여를 매달 한다면 각 증여일 기준 확인이 필요합니다.</p>
-          <a href="https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&amp;lsJoLnkSeq=1029615597" className="underline">공제 근거: 상속세 및 증여세법 제53조</a>
+        <div className="border border-slate-400 p-3 text-xs space-y-1.5 leading-relaxed text-slate-800">
+          <p>
+            • <strong className="font-bold">직계존속(부모·조부모) 합산 규칙:</strong> 증여재산 공제는 증여받는 자녀(수증자) 기준으로 직전 10년 이내 부모·조부모에게 공제받은 금액을 합산해 미성년 2,000만원, 성년(만 19세 이상) 5,000만원 한도를 확인합니다.
+          </p>
+          <p>
+            • <strong className="font-bold">유기정기금(기간을 정해 매달 일정 금액을 주기로 약정하는 증여):</strong> 세법상 연 3% 복리 할인 평가는 사전 증여계약과 최초 이체분 신고 등 요건을 갖춰야 하며, 중도 변경·해지 시 평가 방식이 달라지므로 이 도구는 할인 최대 월액을 확정 제시하지 않습니다.
+          </p>
+          <p>
+            • <strong className="font-bold">혼인·출산 공제 주의:</strong> 자녀 본인이 태어났을 때가 아니라, 자녀가 자라서 <strong className="font-bold">결혼(혼인신고일 전후 2년)</strong>하거나 <strong className="font-bold">자녀의 아이를 출산·입양(출생일로부터 2년)</strong>할 때 직계존속에게 받는 증여에 통합 1억원이 추가 적용됩니다.
+          </p>
+          <p className="text-[11px] text-slate-600 pt-0.5">
+            공식 근거:{' '}
+            <a
+              href="https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1029615597"
+              target="_blank"
+              rel="noreferrer"
+              className="underline font-semibold"
+            >
+              상속세 및 증여세법 제53조·제53조의2
+            </a>
+            {' · '}
+            <a
+              href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=7730&mi=2308"
+              target="_blank"
+              rel="noreferrer"
+              className="underline font-semibold"
+            >
+              국세청 증여세 신고안내
+            </a>
+          </p>
         </div>
       </section>
 
@@ -203,8 +226,8 @@ export function Sheet1To3GiftOverview({
           </span>
         </div>
         <p className="text-[11.5px] sm:text-xs text-slate-700 mb-3 leading-relaxed">
-          준비 일정은 첫 예정일({firstPeriod.startDate})부터 10년 단위로 나눴어요. 매월{' '}
-          {startParsed.day}일 이체, 매년 {startParsed.month}월에는 통장 거래내역서를 뽑아 보관하세요.
+          첫 예정일({firstPeriod.startDate})부터 10년 단위로 정리한 주요 일정입니다. 매월{' '}
+          {startParsed.day}일 이체 후 확인하고, 매년 {startParsed.month}월에는 통장 거래내역서를 뽑아 보관하세요.
         </p>
 
         <div className="table-scroll-wrap">
@@ -257,18 +280,18 @@ export function Sheet1To3GiftOverview({
           </span>
         </div>
         <p className="text-xs text-slate-600 mb-2.5">
-          구간마다 같은 순서로 합니다.
+          새 10년 준비 구간을 시작할 때마다 아래 순서로 점검합니다.
         </p>
 
         <div className="border border-slate-400 rounded-sm divide-y divide-slate-300 text-[11.5px] sm:text-xs mb-4">
           {[
             {
               id: 'step-1-cancel-prev',
-              text: '이전 구간 자동이체 해지 (1차는 해당 없음)',
+              text: '이전 구간 자동이체 종료 확인 (1차는 해당 없음)',
             },
             {
               id: 'step-2-contract',
-              text: '증여계약서 작성 (시작일·종료일·금액)',
+              text: '증여계약서 작성 (증여자·수증자·시작일·종료일·월 이체 금액 명시)',
             },
             {
               id: 'step-3-autotransfer',
@@ -276,11 +299,11 @@ export function Sheet1To3GiftOverview({
             },
             {
               id: 'step-4-hometax',
-              text: '정기금 약정·평가·신고 조건 확인 (표의 날짜는 잠정)',
+              text: '첫 이체일이 속한 달의 말일부터 3개월 이내 홈택스 증여세 신고 진행',
             },
             {
               id: 'step-5-adult-account',
-              text: '성년 구간(3차~)은 아이 본인 명의로 진행, 계좌 운용권도 넘기기',
+              text: '성년 구간(만 19세 이후)부터는 자녀 본인이 직접 신고·계좌 관리하도록 안내',
             },
           ].map((item) => (
             <div
@@ -309,14 +332,14 @@ export function Sheet1To3GiftOverview({
               <tr>
                 <th className="w-12">구간</th>
                 <th className="w-24">시작일</th>
-                <th>그때 나이 · 공제</th>
-                <th className="w-32">월 증여액</th>
-                <th className="w-24">신고 마감</th>
+                <th>그때 나이 · 일반 공제 기준</th>
+                <th className="w-32">월 증여 계획액</th>
+                <th className="w-24">신고기한</th>
                 <th className="w-12">완료</th>
               </tr>
             </thead>
             <tbody>
-              {periods.map((p, idx) => (
+              {periods.map((p) => (
                 <tr key={p.periodNumber}>
                   <td className="font-bold bg-slate-50 whitespace-nowrap">
                     {p.label}
@@ -326,17 +349,12 @@ export function Sheet1To3GiftOverview({
                   </td>
                   <td className="whitespace-nowrap">
                     만 {p.ageAtStart}세 ·{' '}
-                    {p.deductionLimitManwon.toLocaleString('ko-KR')}만
+                    {p.deductionLimitManwon.toLocaleString('ko-KR')}만원 기준
                   </td>
                   <td className="whitespace-nowrap">
                     <div className="font-bold">
                       {p.monthlyPlanned.toLocaleString('ko-KR')}원
                     </div>
-                    {idx > 0 && (
-                      <div className="text-[10px] text-slate-500">
-                        10년 기준 참고
-                      </div>
-                    )}
                   </td>
                   <td className="font-semibold whitespace-nowrap">
                     {p.reportDeadline}
@@ -358,21 +376,21 @@ export function Sheet1To3GiftOverview({
 
         {/* 매달 이체일 체크리스트 */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-2">
-          매달 {startParsed.day}일
+          매달 {startParsed.day}일 점검
         </h3>
         <div className="border border-slate-400 rounded-sm divide-y divide-slate-300 text-[11.5px] sm:text-xs mb-4">
           {[
             {
               id: 'monthly-check-1',
-              text: '정해진 날짜·금액대로 이체됐는지 확인 (적요에 "증여")',
+              text: '약정한 날짜·금액대로 이체됐는지 확인 (통장 적요에 "정기금 증여" 표시)',
             },
             {
               id: 'monthly-check-2',
-              text: '빠진 달이 있으면 계약 금액대로 보충하고 기록',
+              text: '미이체된 달이 있으면 약정 내용에 맞게 보충 이체 후 비고란에 사유 기록',
             },
             {
               id: 'monthly-check-3',
-              text: '아이 계좌에서 부모가 꺼내 쓰지 않기',
+              text: '자녀 계좌에 입금된 돈을 부모 계좌로 다시 빼서 쓰지 않기 (혼용 주의)',
             },
           ].map((item) => (
             <div
@@ -394,19 +412,19 @@ export function Sheet1To3GiftOverview({
           ))}
         </div>
 
-        {/* 주의 사항 */}
+        {/* 증빙 보관 수칙 */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-2">
-          주의 사항
+          증빙 보관 수칙
         </h3>
         <div className="border border-slate-400 rounded-sm divide-y divide-slate-300 text-[11.5px] sm:text-xs mb-4">
           {[
             {
               id: 'caution-check-1',
-              text: '연 1회 통장 거래내역서 뽑아서 보관하기 (나중에 증여 소명용)',
+              text: '연 1회 통장 거래내역서와 증여세 신고서 접수증을 함께 출력해 바인더에 보관하기',
             },
             {
               id: 'caution-check-2',
-              text: '아이 통장으로 입금할 때 통장 표시(메모) 칸에 기록하기 — 누가 준 돈인지 적기 (예: 설날 세뱃돈, ○○ 용돈, 어린이날 ○○)',
+              text: '아이 계좌에 입금할 때 보낸 사람과 명목을 통장 메모에 남기기 (예: 설날 조부모 용돈, 1차 정기금)',
             },
           ].map((item) => (
             <div
@@ -430,24 +448,24 @@ export function Sheet1To3GiftOverview({
 
         {/* 정기금 외에 들어오는 돈 */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-2">
-          정기금 외에 들어오는 돈
+          정기금 외에 들어오는 돈 구분하기
         </h3>
         <div className="border border-slate-400 rounded-sm divide-y divide-slate-300 text-[11.5px] sm:text-xs">
           {[
             {
               id: 'extra-money-1',
               bold: '아동수당:',
-              text: '아이 명의 계좌로 직접 받으면 증여가 아닙니다',
+              text: '지자체에서 지급하는 수당을 아이 명의 계좌로 직접 수령하면 증여세 비과세 대상입니다.',
             },
             {
               id: 'extra-money-2',
-              bold: '교육비:',
-              text: '학교·학원에 부모가 직접 내면 증여세 대상이 아닙니다',
+              bold: '학비·생활비:',
+              text: '사회통념상 인정되는 교육비·치료비 등을 필요할 때마다 직접 지출하면 비과세이나, 이를 모아 예금·주식·부동산 자금으로 쓰면 증여로 봅니다.',
             },
             {
               id: 'extra-money-3',
               bold: '세뱃돈·용돈·조부모 증여:',
-              text: '모아서 투자하면 증여로 볼 수 있고 한도에 합산돼요. 날짜·금액·보낸 사람을 기록해 두세요',
+              text: '현금이나 용돈통장에 두었다는 이유만으로 비과세가 되지는 않습니다. 금융투자 등에 활용하면 증여 합산 대상이 될 수 있으므로 시트 07에 기록해 관리하세요.',
             },
           ].map((item) => (
             <div
