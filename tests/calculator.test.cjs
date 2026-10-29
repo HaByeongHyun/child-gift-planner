@@ -78,65 +78,71 @@ test('그해 줄 돈 기간·횟수·월액 라벨(첫해·중간해·마지막 
 });
 
 test('신고기한: 2026년 확정 공휴일(삼일절·대체공휴일) 및 근로자의 날·신정 연장', () => {
-  // 2025년 11월 증여 -> 3개월 후 말일 2026.02.28(토) -> 3.1(일,삼일절) -> 3.2(월,대체공휴일) -> 2026.03.03 (확정)
   assert.equal(c.getReportDeadline(2025, 11), '2026.03.03');
-  // 2026년 6월 증여 -> 3개월 후 말일 2026.09.30(수) -> 2026년 공휴일 검증 완료(확정)
   assert.equal(c.getReportDeadline(2026, 6), '2026.09.30');
-  // 2028년 1월 증여 -> 2028.04.30(일) -> 2028.05.01(월, 근로자의 날) -> 2028.05.02 (잠정)
   assert.equal(c.getReportDeadline(2028, 1), '2028.05.02 (잠정)');
-  // 2028년 9월 증여 -> 2028.12.31(일) -> 2029.01.01(월, 신정) -> 2029.01.02 (잠정)
   assert.equal(c.getReportDeadline(2028, 9), '2029.01.02 (잠정)');
 });
 
-test('체크한 뒤 월 계획액을 바꿔도 과거 실제 입금 합계는 보존됨', () => {
+test('체크한 뒤 월 계획액을 바꿔도 과거 확정 입금액은 보존되고, 금액 미기록 과거 체크는 현재 설정으로 바뀌지 않음', () => {
   const checkedMap = {
-    'installment-2026-10': true,
-    'installment-2026-11': true,
+    'installment-2026-10': true, // 금액 기록 있음 (200,000원)
+    'installment-2026-11': true, // 구버전 등에서 금액 없이 체크만 된 기록
   };
-  // 체크 당시 월 200,000원으로 기록된 스냅샷
   const checkedAmountMap = {
     'installment-2026-10': 200000,
-    'installment-2026-11': 200000,
   };
-  // 이후 사용자가 월 계획액을 350,000원으로 변경한 상황
-  const pAfterChange = c.calculateGiftPeriods('2026-06-23', '2026-10-25', 350000)[0];
+  // 이후 사용자가 월 계획액을 500,000원으로 변경한 상황
+  const pAfterChange = c.calculateGiftPeriods('2026-06-23', '2026-10-25', 500000)[0];
   const row2026 = c.generateInstallmentSchedule(pAfterChange)[0];
 
-  // 예정액(그해 줄 돈)은 3회 × 35만원 = 1,050,000원으로 바뀌지만
-  assert.equal(row2026.annualAmount, 1050000);
+  assert.equal(row2026.annualAmount, 1500000);
 
-  // 이미 체크한 2개월분의 실제 입금 합계는 당시 기록된 400,000원으로 보존됨
   const actual = c.calculateActualInstallmentRowTotal(
     2026,
     row2026.activeMonths,
     checkedMap,
-    checkedAmountMap,
-    pAfterChange.monthlyPlanned
+    checkedAmountMap
   );
   assert.equal(actual.checkedCount, 2);
-  assert.equal(actual.actualAmountWon, 400000);
+  assert.equal(actual.confirmedCount, 1);
+  assert.equal(actual.unverifiedCount, 1);
+  assert.deepEqual(actual.unverifiedMonths, [11]);
+  // 미확인 11월분이 500,000원으로 둔갑해 합산되지 않고 확정된 10월분(200,000원)만 합산됨
+  assert.equal(actual.actualAmountWon, 200000);
 });
 
-test('증여 구간과 목돈 매칭: 연도만 겹치고 실제 날짜가 어긋나는 경우 구분', () => {
-  // 아이 생일: 2026-06-23, 첫 증여 시작: 2026-10-25
-  // 2차 구간: 2036.10.25 ~ 2046.09.25
-  // 3차 구간: 2046.10.25 ~ 2056.09.25
-  const periods = c.calculateGiftPeriods('2026-06-23', '2026-10-25', 200000);
-  // 자취 보증금 시점을 만 20세(2046.06.23)로 설정하면:
-  // 연도는 2046년이라 3차 구간 시작연도(2046년)와 같지만, 실제 날짜(2046.06.23)는 3차 시작일(2046.10.25) 이전임!
-  const items = c.calculateLumpSumExpenses('2026-06-23', '2026-10-25', 2.5, {
-    'dorm-deposit': { targetAge: 20 },
+test('목돈 필요 시기: 아이 생일로 날짜를 임의 지정하지 않으며 지정일 입력 시에만 날짜 판정', () => {
+  const periods = c.calculateGiftPeriods('2026-12-23', '2026-12-25', 200000);
+  const defaultItems = c.calculateLumpSumExpenses('2026-12-23', '2026-12-25', 2.5);
+  const dormDefault = defaultItems.find((i) => i.id === 'dorm-deposit');
+
+  // 기본 상태에서 아이 생일(2045.12.23)이 임의로 생성되지 않아야 함
+  assert.equal(dormDefault.customDate, undefined);
+  assert.equal(dormDefault.customDateDot, undefined);
+  assert.equal(dormDefault.startYear, 2045);
+
+  // 경계 연도(2046년)에 걸친 항목은 지정일이 없으면 경계 확인 필요(isBoundaryYearEstimate)로 표시
+  const boundaryItems = c.calculateLumpSumExpenses('2026-12-23', '2026-12-25', 2.5, {
+    'dorm-deposit': { targetAge: 20 }, // 2046년
   });
+  const matchP3Boundary = c.matchLumpSumItemsToPeriod(periods[2], boundaryItems);
+  const dormBoundaryMatch = matchP3Boundary.matchedItems.find(
+    (m) => m.id === 'dorm-deposit'
+  );
+  assert.ok(dormBoundaryMatch);
+  assert.equal(dormBoundaryMatch.isBoundaryYearEstimate, true);
 
-  const matchPeriod2 = c.matchLumpSumItemsToPeriod(periods[1], items);
-  const matchPeriod3 = c.matchLumpSumItemsToPeriod(periods[2], items);
-
-  // 2차 구간(2036.10.25~2046.09.25)에는 실제 날짜가 포함됨
-  assert.ok(matchPeriod2.matchedItems.some((m) => m.id === 'dorm-deposit'));
-  // 3차 구간(2046.10.25~2056.09.25)에는 실제 날짜가 포함되지 않고, 연도만 겹치는 제외 항목으로 분류됨
-  assert.ok(!matchPeriod3.matchedItems.some((m) => m.id === 'dorm-deposit'));
+  // 사용자가 실제 예정일(2046-03-02)을 직접 지정하면 실제 날짜 기준으로 2차에만 포함되고 3차(2046.12.25 시작)에서는 제외됨
+  const datedItems = c.calculateLumpSumExpenses('2026-12-23', '2026-12-25', 2.5, {
+    'dorm-deposit': { targetAge: 20, customDate: '2046-03-02' },
+  });
+  const matchP2Dated = c.matchLumpSumItemsToPeriod(periods[1], datedItems);
+  const matchP3Dated = c.matchLumpSumItemsToPeriod(periods[2], datedItems);
+  assert.ok(matchP2Dated.matchedItems.some((m) => m.id === 'dorm-deposit'));
+  assert.ok(!matchP3Dated.matchedItems.some((m) => m.id === 'dorm-deposit'));
   assert.ok(
-    matchPeriod3.yearOnlyMismatchItems.some((m) => m.id === 'dorm-deposit')
+    matchP3Dated.yearOnlyMismatchItems.some((m) => m.id === 'dorm-deposit')
   );
 });
 
@@ -149,8 +155,44 @@ test('결혼 나이·가족 지원 계획액·포함 여부 수정 반영', () =
   const house = items.find((i) => i.id === 'newlywed-house');
 
   assert.equal(wedding.targetAge, 30);
-  assert.equal(wedding.timingYearLabel, '2056년');
+  assert.equal(wedding.timingYearLabel, '2056년 무렵');
   assert.equal(wedding.familySupportManwon, 3000);
   assert.equal(house.included, false);
   assert.equal(house.familySupportFutureLabel, '지원 제외(0원)');
+});
+
+test('시트 4 시작 시점 지연 비교: 동일한 만 35세 생일 기준일까지 계산하여 지연 시 횟수·금액 차이 반영', () => {
+  const rows = c.calculateDelaySimulations('2026-06-23', '2026-10-25', 200000);
+  assert.equal(rows[0].cutoffDateAtAge35, '2061.06.23');
+  assert.equal(rows[0].monthsUntilAge35, 416);
+  assert.equal(rows[0].plannedManwonUntilAge35, 8320);
+
+  assert.equal(rows[1].monthsUntilAge35, 404);
+  assert.equal(rows[1].plannedManwonUntilAge35, 8080);
+  assert.equal(rows[1].diffMonthsFromBase, -12);
+  assert.equal(rows[1].diffManwonFromBase, -240);
+
+  assert.equal(rows[2].monthsUntilAge35, 392);
+  assert.equal(rows[2].plannedManwonUntilAge35, 7840);
+  assert.equal(rows[2].diffMonthsFromBase, -24);
+  assert.equal(rows[2].diffManwonFromBase, -480);
+});
+
+test('공유 링크 쿼리 파싱: monthly=0 및 rate=0이 기본값으로 덮어써지지 않고 0으로 반영됨', () => {
+  const fallback = {
+    childName: '기존아이',
+    blessingMessage: '기본문구',
+    birthDate: '2026-06-23',
+    startDate: '2026-10-25',
+    monthlyGiftWon: 200000,
+    inflationRate: 2.5,
+  };
+  const parsed = c.parseSharedLinkParams(
+    '?name=%EB%91%98%EC%A7%B8&birth=2027-01-15&start=2027-03-25&monthly=0&rate=0',
+    fallback
+  );
+  assert.equal(parsed.hasSharedParams, true);
+  assert.equal(parsed.sharedInput.childName, '둘째');
+  assert.equal(parsed.sharedInput.monthlyGiftWon, 0);
+  assert.equal(parsed.sharedInput.inflationRate, 0);
 });

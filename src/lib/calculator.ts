@@ -39,10 +39,12 @@ export interface DelaySimulationRow {
   ageAtStart: number;
   minorPeriodCount: number;
   adultPeriodCount: number;
-  totalDeductionManwon: number; // 단순 합계 참고값 (오해 방지를 위해 UI에서는 전환 시점·계획 총액 중심으로 표시)
-  totalPeriodCount: number; // 만 35세 이전 시작 구간 수
-  totalPlannedMonths: number; // 총 준비 개월 수 (구간 수 × 120개월)
-  totalPlannedManwon: number; // 월 계획액 기준 누적 입금 예정액 (만원)
+  totalDeductionManwon: number; // 과거 호환용 필드
+  cutoffDateAtAge35: string; // 동일한 비교 종료 기준일 (만 35세 생일, 예: "2061.06.23")
+  monthsUntilAge35: number; // 만 35세 생일까지 실제 이체되는 횟수
+  plannedManwonUntilAge35: number; // 만 35세 생일까지 누적 계획 입금액 (만원)
+  diffMonthsFromBase: number; // 입력한 날 시작 대비 이체 횟수 차이 (예: 0, -12, -24)
+  diffManwonFromBase: number; // 입력한 날 시작 대비 계획 입금액 차이 (만원, 예: 0, -240, -480)
   firstAdultPeriodSummary: string; // 첫 성년 기준(만 19세 이상) 구간 시작 시점 요약
 }
 
@@ -59,6 +61,7 @@ export interface ExpenseItemOverride {
   targetAge?: number; // 시작 만 나이 변경 (예: 결혼 나이 기본 32 -> 수정 가능)
   familySupportManwon?: number; // 가족이 지원할 계획 금액 (2026년 현재가 기준, 만원)
   included?: boolean; // 계획 포함 여부 (선택 가정)
+  customDate?: string; // 사용자가 직접 지정한 실제 예정일 (YYYY-MM-DD, 선택)
 }
 
 export type ExpenseOverridesMap = Record<string, ExpenseItemOverride>;
@@ -70,8 +73,10 @@ export interface LumpSumExpenseItem {
   sourceType: '공식통계(교육부 2026)' | '예산예시(가정값)';
   timingAgeLabel: string; // "만 19~22세"
   timingYearLabel: string; // "2045~2048년"
-  startDateStr: string; // 실제 비교용 시작일 "2045.06.23"
-  endDateStr: string; // 실제 비교용 종료일 "2048.06.23"
+  startYear: number; // 예상 시작 연도 (예: 2045)
+  endYear: number; // 예상 종료 연도 (예: 2048)
+  customDate?: string; // 사용자가 직접 입력한 예정일 YYYY-MM-DD (없으면 undefined, 생일로 임의 생성하지 않음)
+  customDateDot?: string; // 사용자가 직접 입력한 예정일 YYYY.MM.DD
   defaultTargetAge: number;
   targetAge: number;
   ageSpanYears: number; // 단년도면 0, 4개년이면 3 등
@@ -89,7 +94,7 @@ export interface PeriodLumpSumMatchResult {
   matchedItems: {
     id: string;
     title: string;
-    isPartialOverlap: boolean;
+    isBoundaryYearEstimate: boolean;
     label: string;
   }[];
   yearOnlyMismatchItems: {
@@ -160,6 +165,67 @@ export function formatDotYMD(year: number, month: number, day: number): string {
   const mm = String(month).padStart(2, '0');
   const dd = String(day).padStart(2, '0');
   return `${year}.${mm}.${dd}`;
+}
+
+/**
+ * URL 공유 쿼리 파라미터를 파싱합니다.
+ * - monthly=0, rate=0 처럼 숫자 0이 전달된 경우에도 falsy로 무시되지 않고 정확히 0으로 반영합니다.
+ */
+export function parseSharedLinkParams(
+  search: string,
+  fallbackInput: PlannerInput
+): {
+  hasSharedParams: boolean;
+  sharedInput: PlannerInput;
+} {
+  const params = new URLSearchParams(search);
+  const keys = ['name', 'birth', 'start', 'monthly', 'rate', 'msg'];
+  const hasSharedParams = keys.some((k) => params.has(k));
+
+  if (!hasSharedParams) {
+    return { hasSharedParams: false, sharedInput: { ...fallbackInput } };
+  }
+
+  const qName = params.get('name');
+  const qBirth = params.get('birth');
+  const qStart = params.get('start');
+  const qMonthly = params.get('monthly');
+  const qRate = params.get('rate');
+  const qMsg = params.get('msg');
+
+  let monthlyGiftWon = fallbackInput.monthlyGiftWon;
+  if (qMonthly !== null && qMonthly.trim() !== '') {
+    const num = Number(qMonthly);
+    if (Number.isFinite(num)) {
+      monthlyGiftWon = Math.min(1000000000, Math.max(0, Math.floor(num)));
+    }
+  }
+
+  let inflationRate = fallbackInput.inflationRate;
+  if (qRate !== null && qRate.trim() !== '') {
+    const num = parseFloat(qRate);
+    if (Number.isFinite(num)) {
+      inflationRate = Math.min(15, Math.max(0, num));
+    }
+  }
+
+  return {
+    hasSharedParams: true,
+    sharedInput: {
+      childName: qName !== null ? qName : fallbackInput.childName,
+      birthDate:
+        qBirth !== null && /^\d{4}-\d{2}-\d{2}$/.test(qBirth)
+          ? qBirth
+          : fallbackInput.birthDate,
+      startDate:
+        qStart !== null && /^\d{4}-\d{2}-\d{2}$/.test(qStart)
+          ? qStart
+          : fallbackInput.startDate,
+      monthlyGiftWon,
+      inflationRate,
+      blessingMessage: qMsg !== null ? qMsg : fallbackInput.blessingMessage,
+    },
+  };
 }
 
 /**
@@ -376,19 +442,26 @@ export function generateCalendarTodos(periods: GiftPeriod[]): CalendarTodoItem[]
 
 /**
  * 시트 4: 시작 시점 비교 시뮬레이션 (입력한 날 시작 vs 1년 늦추면 vs 2년 늦추면)
+ * - 세 시나리오 모두 '아이의 만 35세 생일(cutoffDateAtAge35)'이라는 동일한 종료 기준일까지 실제로 이체되는 횟수와 누적 계획액을 계산합니다.
  */
 export function calculateDelaySimulations(
   birthDateStr: string,
   startDateStr: string,
   monthlyGiftWon = 200000
 ): DelaySimulationRow[] {
+  const birth = parseYMD(birthDateStr);
   const start = parseYMD(startDateStr);
   const labels = ['입력한 날 시작', '1년 늦추면', '2년 늦추면'];
   const monthlyPlanned = Number.isFinite(monthlyGiftWon)
     ? Math.max(0, Math.floor(monthlyGiftWon))
     : 0;
 
-  return labels.map((label, delayYears) => {
+  // 동일한 종료 기준일: 아이의 만 35세 생일 (YYYY.MM.DD)
+  const y35 = birth.year + 35;
+  const d35 = Math.min(birth.day, getLastDayOfMonth(y35, birth.month));
+  const cutoffDateAtAge35 = formatDotYMD(y35, birth.month, d35);
+
+  const rawRows = labels.map((label, delayYears) => {
     const delayedYear = start.year + delayYears;
     const maxDay = getLastDayOfMonth(delayedYear, start.month);
     const dDay = Math.min(start.day, maxDay);
@@ -401,10 +474,24 @@ export function calculateDelaySimulations(
       (sum, p) => sum + p.deductionLimitManwon,
       0
     );
-    const totalPeriodCount = periods.length;
-    const totalPlannedMonths = totalPeriodCount * 120;
-    const totalPlannedManwon = Math.round(
-      (totalPlannedMonths * monthlyPlanned) / 10000
+
+    // 각 구간(120회)의 월별 실제 이체일 중 아이의 만 35세 생일(cutoffDateAtAge35) 이하인 횟수만 집계
+    let monthsUntilAge35 = 0;
+    periods.forEach((p) => {
+      for (let mOffset = 0; mOffset < 120; mOffset++) {
+        const totalM = p.startYear * 12 + (start.month - 1) + mOffset;
+        const y = Math.floor(totalM / 12);
+        const m = (totalM % 12) + 1;
+        const dayInMonth = Math.min(start.day, getLastDayOfMonth(y, m));
+        const transferDate = formatDotYMD(y, m, dayInMonth);
+        if (transferDate <= cutoffDateAtAge35) {
+          monthsUntilAge35 += 1;
+        }
+      }
+    });
+
+    const plannedManwonUntilAge35 = Math.round(
+      (monthsUntilAge35 * monthlyPlanned) / 10000
     );
 
     const firstAdult = periods.find((p) => !p.isMinor);
@@ -419,12 +506,21 @@ export function calculateDelaySimulations(
       minorPeriodCount,
       adultPeriodCount,
       totalDeductionManwon,
-      totalPeriodCount,
-      totalPlannedMonths,
-      totalPlannedManwon,
+      cutoffDateAtAge35,
+      monthsUntilAge35,
+      plannedManwonUntilAge35,
       firstAdultPeriodSummary,
     };
   });
+
+  const baseMonths = rawRows[0]?.monthsUntilAge35 ?? 0;
+  const baseManwon = rawRows[0]?.plannedManwonUntilAge35 ?? 0;
+
+  return rawRows.map((row) => ({
+    ...row,
+    diffMonthsFromBase: row.monthsUntilAge35 - baseMonths,
+    diffManwonFromBase: row.plannedManwonUntilAge35 - baseManwon,
+  }));
 }
 
 /**
@@ -546,16 +642,26 @@ export function generateInstallmentSchedule(firstPeriod: GiftPeriod): MonthlyChe
 
 /**
  * 시트 6: 특정 연도의 실제 체크된 입금 횟수와 실제 입금액 합계를 계산합니다.
- * 체크 시점에 저장된 금액(checkedAmountMap)을 우선 사용하여, 이후 월 계획액을 변경해도 과거 실제 입금액 합계가 변하지 않습니다.
+ * - 체크 시점에 금액이 저장된 기록(checkedAmountMap)만 확정 합계(actualAmountWon)에 포함합니다.
+ * - 이전 버전 등에서 금액 없이 체크만 저장된 기록은 현재 월 계획액으로 대체 계산하지 않고,
+ *   '입금액 확인 필요(unverifiedCount)'로 분리하여 설정 변경 시 과거 입금액이 바뀌지 않도록 보장합니다.
  */
 export function calculateActualInstallmentRowTotal(
   year: number,
   activeMonths: boolean[],
   checkedMap: Record<string, boolean>,
-  checkedAmountMap: Record<string, number>,
-  fallbackMonthlyWon: number
-): { checkedCount: number; actualAmountWon: number } {
+  checkedAmountMap: Record<string, number>
+): {
+  checkedCount: number;
+  confirmedCount: number;
+  unverifiedCount: number;
+  unverifiedMonths: number[];
+  actualAmountWon: number;
+} {
   let checkedCount = 0;
+  let confirmedCount = 0;
+  let unverifiedCount = 0;
+  const unverifiedMonths: number[] = [];
   let actualAmountWon = 0;
 
   activeMonths.forEach((isActive, idx) => {
@@ -563,15 +669,24 @@ export function calculateActualInstallmentRowTotal(
     const key = `installment-${year}-${idx + 1}`;
     if (checkedMap[key]) {
       checkedCount += 1;
-      const recordedAmount = checkedAmountMap[key];
-      actualAmountWon +=
-        typeof recordedAmount === 'number' && Number.isFinite(recordedAmount)
-          ? recordedAmount
-          : fallbackMonthlyWon;
+      const recordedAmount = checkedAmountMap?.[key];
+      if (typeof recordedAmount === 'number' && Number.isFinite(recordedAmount)) {
+        confirmedCount += 1;
+        actualAmountWon += recordedAmount;
+      } else {
+        unverifiedCount += 1;
+        unverifiedMonths.push(idx + 1);
+      }
     }
   });
 
-  return { checkedCount, actualAmountWon };
+  return {
+    checkedCount,
+    confirmedCount,
+    unverifiedCount,
+    unverifiedMonths,
+    actualAmountWon,
+  };
 }
 
 /**
@@ -592,7 +707,8 @@ export function formatManwonReadable(manwon: number): string {
 /**
  * 시트 8: 자녀 목돈 필요 시기 체크리스트 (현재가 및 물가상승 반영 예상 금액)
  * - 기준연도 2026년 가격을 지급 연도별로 복리 상승 계산하며, 증여 시작일(startDateStr)과 독립입니다.
- * - overrides를 통해 결혼 나이, 항목 포함 여부, 가족 지원 계획액(현재가 만원)을 조정할 수 있습니다.
+ * - 아이의 생일(월·일)로 목돈 필요 날짜를 임의 지정하지 않고, 기본값은 연도·시기 단위로 표시하며
+ *   사용자가 필요한 경우에만 예정일(customDate)을 직접 입력할 수 있습니다.
  */
 export function calculateLumpSumExpenses(
   birthDateStr: string,
@@ -608,13 +724,7 @@ export function calculateLumpSumExpenses(
   const getMultiplierForAge = (targetAge: number): number =>
     Math.pow(1 + r, Math.max(0, birth.year + targetAge - COST_BASE_YEAR));
 
-  const makeAgeDateStr = (age: number): string => {
-    const y = birth.year + age;
-    const maxDay = getLastDayOfMonth(y, birth.month);
-    return formatDotYMD(y, birth.month, Math.min(birth.day, maxDay));
-  };
-
-  // 각 항목별 설정값(나이, 가족지원액, 포함여부) 조회 헬퍼
+  // 각 항목별 설정값(나이, 가족지원액, 포함여부, 직접 입력 날짜) 조회 헬퍼
   const resolveConfig = (
     id: string,
     defaultAge: number,
@@ -631,7 +741,14 @@ export function calculateLumpSumExpenses(
         ? Math.max(0, Math.floor(ov.familySupportManwon))
         : defaultSupportManwon;
     const included = ov?.included !== undefined ? ov.included : true;
-    return { targetAge, familySupportManwon, included };
+    const customDate =
+      typeof ov?.customDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ov.customDate)
+        ? ov.customDate
+        : undefined;
+    const customDateDot = customDate
+      ? customDate.replace(/-/g, '.')
+      : undefined;
+    return { targetAge, familySupportManwon, included, customDate, customDateDot };
   };
 
   // 1. 대학 등록금 (4년): 기본 만 19~22세 4개년 각각 물가 반영 후 합산
@@ -648,7 +765,7 @@ export function calculateLumpSumExpenses(
     ? Math.round(univCfg.familySupportManwon * univAvgMultiplier)
     : 0;
 
-  // 2. 타지역 자취 보증금 (기본 만 19세)
+  // 2. 타지역 자취 보증금 (기본 만 19세 무렵)
   const dormCfg = resolveConfig('dorm-deposit', 19, 1000);
   const dormMult = getMultiplierForAge(dormCfg.targetAge);
   const dormMinFuture = Math.round(500 * dormMult);
@@ -657,7 +774,7 @@ export function calculateLumpSumExpenses(
     ? Math.round(dormCfg.familySupportManwon * dormMult)
     : 0;
 
-  // 3. 어학연수·교환학생 (기본 만 20~22세, 대표연도 startAge + 1)
+  // 3. 어학연수·교환학생 (기본 만 20~22세 무렵, 대표연도 startAge + 1)
   const studyCfg = resolveConfig('study-abroad', 20, 1500);
   const studyAbroadMult = getMultiplierForAge(studyCfg.targetAge + 1);
   const studyMinFuture = Math.round(1000 * studyAbroadMult);
@@ -666,7 +783,7 @@ export function calculateLumpSumExpenses(
     ? Math.round(studyCfg.familySupportManwon * studyAbroadMult)
     : 0;
 
-  // 4. 취업 준비·자격증 (기본 만 22~24세, 대표연도 startAge + 1)
+  // 4. 취업 준비·자격증 (기본 만 22~24세 무렵, 대표연도 startAge + 1)
   const jobCfg = resolveConfig('job-prep', 22, 300);
   const jobPrepMult = getMultiplierForAge(jobCfg.targetAge + 1);
   const jobMinFuture = Math.round(100 * jobPrepMult);
@@ -675,7 +792,7 @@ export function calculateLumpSumExpenses(
     ? Math.round(jobCfg.familySupportManwon * jobPrepMult)
     : 0;
 
-  // 5. 결혼 준비 (기본 만 32세, 선택 가정)
+  // 5. 결혼 준비 (기본 만 32세 무렵, 선택 가정)
   const weddingCfg = resolveConfig('wedding-prep', 32, 6298);
   const weddingMult = getMultiplierForAge(weddingCfg.targetAge);
   const weddingFuture = Math.round(6298 * weddingMult);
@@ -699,10 +816,12 @@ export function calculateLumpSumExpenses(
       title: '대학 등록금 (4년)',
       requiredOrOptional: '선택',
       sourceType: '공식통계(교육부 2026)',
-      timingAgeLabel: `만 ${univCfg.targetAge}~${univCfg.targetAge + 3}세`,
+      timingAgeLabel: `대학 재학 무렵\n만 ${univCfg.targetAge}~${univCfg.targetAge + 3}세`,
       timingYearLabel: `${birth.year + univCfg.targetAge}~${birth.year + univCfg.targetAge + 3}년`,
-      startDateStr: makeAgeDateStr(univCfg.targetAge),
-      endDateStr: makeAgeDateStr(univCfg.targetAge + 3),
+      startYear: birth.year + univCfg.targetAge,
+      endYear: birth.year + univCfg.targetAge + 3,
+      customDate: univCfg.customDate,
+      customDateDot: univCfg.customDateDot,
       defaultTargetAge: 19,
       targetAge: univCfg.targetAge,
       ageSpanYears: 3,
@@ -726,10 +845,12 @@ export function calculateLumpSumExpenses(
       title: '타지역 자취 보증금',
       requiredOrOptional: '선택',
       sourceType: '예산예시(가정값)',
-      timingAgeLabel: `대학 입학 무렵\n만 ${dormCfg.targetAge}세`,
-      timingYearLabel: `${birth.year + dormCfg.targetAge}년`,
-      startDateStr: makeAgeDateStr(dormCfg.targetAge),
-      endDateStr: makeAgeDateStr(dormCfg.targetAge),
+      timingAgeLabel: `대학 입학 무렵\n만 ${dormCfg.targetAge}세경`,
+      timingYearLabel: `${birth.year + dormCfg.targetAge}년 무렵`,
+      startYear: birth.year + dormCfg.targetAge,
+      endYear: birth.year + dormCfg.targetAge,
+      customDate: dormCfg.customDate,
+      customDateDot: dormCfg.customDateDot,
       defaultTargetAge: 19,
       targetAge: dormCfg.targetAge,
       ageSpanYears: 0,
@@ -751,10 +872,12 @@ export function calculateLumpSumExpenses(
       title: '어학연수·교환학생',
       requiredOrOptional: '선택',
       sourceType: '예산예시(가정값)',
-      timingAgeLabel: `대학 재학 중\n만 ${studyCfg.targetAge}~${studyCfg.targetAge + 2}세`,
+      timingAgeLabel: `대학 재학 중\n만 ${studyCfg.targetAge}~${studyCfg.targetAge + 2}세경`,
       timingYearLabel: `${birth.year + studyCfg.targetAge}~${birth.year + studyCfg.targetAge + 2}년`,
-      startDateStr: makeAgeDateStr(studyCfg.targetAge),
-      endDateStr: makeAgeDateStr(studyCfg.targetAge + 2),
+      startYear: birth.year + studyCfg.targetAge,
+      endYear: birth.year + studyCfg.targetAge + 2,
+      customDate: studyCfg.customDate,
+      customDateDot: studyCfg.customDateDot,
       defaultTargetAge: 20,
       targetAge: studyCfg.targetAge,
       ageSpanYears: 2,
@@ -776,10 +899,12 @@ export function calculateLumpSumExpenses(
       title: '취업 준비·자격증',
       requiredOrOptional: '선택',
       sourceType: '예산예시(가정값)',
-      timingAgeLabel: `만 ${jobCfg.targetAge}~${jobCfg.targetAge + 2}세`,
+      timingAgeLabel: `졸업 전후 무렵\n만 ${jobCfg.targetAge}~${jobCfg.targetAge + 2}세경`,
       timingYearLabel: `${birth.year + jobCfg.targetAge}~${birth.year + jobCfg.targetAge + 2}년`,
-      startDateStr: makeAgeDateStr(jobCfg.targetAge),
-      endDateStr: makeAgeDateStr(jobCfg.targetAge + 2),
+      startYear: birth.year + jobCfg.targetAge,
+      endYear: birth.year + jobCfg.targetAge + 2,
+      customDate: jobCfg.customDate,
+      customDateDot: jobCfg.customDateDot,
       defaultTargetAge: 22,
       targetAge: jobCfg.targetAge,
       ageSpanYears: 2,
@@ -801,10 +926,12 @@ export function calculateLumpSumExpenses(
       title: '결혼 준비',
       requiredOrOptional: '선택',
       sourceType: '예산예시(가정값)',
-      timingAgeLabel: `선택 가정\n만 ${weddingCfg.targetAge}세`,
-      timingYearLabel: `${birth.year + weddingCfg.targetAge}년`,
-      startDateStr: makeAgeDateStr(weddingCfg.targetAge),
-      endDateStr: makeAgeDateStr(weddingCfg.targetAge),
+      timingAgeLabel: `선택 가정\n만 ${weddingCfg.targetAge}세 무렵`,
+      timingYearLabel: `${birth.year + weddingCfg.targetAge}년 무렵`,
+      startYear: birth.year + weddingCfg.targetAge,
+      endYear: birth.year + weddingCfg.targetAge,
+      customDate: weddingCfg.customDate,
+      customDateDot: weddingCfg.customDateDot,
       defaultTargetAge: 32,
       targetAge: weddingCfg.targetAge,
       ageSpanYears: 0,
@@ -824,10 +951,12 @@ export function calculateLumpSumExpenses(
       title: '신혼집 보증금·\n주택자금',
       requiredOrOptional: '선택',
       sourceType: '예산예시(가정값)',
-      timingAgeLabel: `선택 가정\n만 ${houseCfg.targetAge}세`,
-      timingYearLabel: `${birth.year + houseCfg.targetAge}년`,
-      startDateStr: makeAgeDateStr(houseCfg.targetAge),
-      endDateStr: makeAgeDateStr(houseCfg.targetAge),
+      timingAgeLabel: `선택 가정\n만 ${houseCfg.targetAge}세 무렵`,
+      timingYearLabel: `${birth.year + houseCfg.targetAge}년 무렵`,
+      startYear: birth.year + houseCfg.targetAge,
+      endYear: birth.year + houseCfg.targetAge,
+      customDate: houseCfg.customDate,
+      customDateDot: houseCfg.customDateDot,
       defaultTargetAge: 32,
       targetAge: houseCfg.targetAge,
       ageSpanYears: 0,
@@ -849,9 +978,12 @@ export function calculateLumpSumExpenses(
 }
 
 /**
- * 시트 8: 증여 구간(실제 시작일~종료일)과 목돈 항목(실제 발생 날짜 구간)을 정밀 비교합니다.
- * - 단순 연도(year) 비교가 아니라 YYYY.MM.DD 실제 날짜를 기준으로 겹치는지 판별합니다.
- * - 연도는 겹치지만 실제 날짜가 구간 시작 전이거나 종료 후인 경우(연도 착시)를 별도로 분리합니다.
+ * 시트 8: 증여 구간(시작일~종료일)과 목돈 항목을 연결합니다.
+ * - 아이의 생일로 목돈 필요일을 임의 지정하지 않습니다.
+ * - 사용자가 예정일(customDate)을 직접 입력한 경우에는 실제 날짜(YYYY.MM.DD)로 구간 포함 여부를 정확히 판별합니다.
+ * - 예정일을 입력하지 않은 기본 상태(연도 단위 추정)에서는:
+ *   - 구간 내부 연도(startYear < y < endYear)에 완전히 속하면 해당 구간 항목으로 표시하고,
+ *   - 구간이 시작·종료되는 경계 연도(startYear 또는 endYear)에 걸치면 생일로 임의 판정하지 않고 '경계 연도 걸침(실제 필요월 확인)'으로 안내합니다.
  */
 export function matchLumpSumItemsToPeriod(
   period: GiftPeriod,
@@ -863,48 +995,73 @@ export function matchLumpSumItemsToPeriod(
   lumpSumItems.forEach((item) => {
     if (!item.included) return;
     const cleanTitle = item.title.replace(/\n/g, ' ');
-    const itemStartYear = parseYMD(item.startDateStr).year;
-    const itemEndYear = parseYMD(item.endDateStr).year;
 
-    const hasDateOverlap =
-      item.startDateStr <= period.endDate && item.endDateStr >= period.startDate;
+    // 1. 사용자가 직접 예정일(customDateDot)을 지정한 경우: 실제 날짜 기준 비교
+    if (item.customDateDot) {
+      const customYear = parseYMD(item.customDateDot).year;
+      const isDateInside =
+        item.customDateDot >= period.startDate &&
+        item.customDateDot <= period.endDate;
+      const isYearOverlap =
+        customYear >= period.startYear && customYear <= period.endYear;
+
+      if (isDateInside) {
+        matchedItems.push({
+          id: item.id,
+          title: cleanTitle,
+          isBoundaryYearEstimate: false,
+          label: `${cleanTitle} (지정일 ${item.customDateDot})`,
+        });
+      } else if (isYearOverlap) {
+        const reason =
+          item.customDateDot < period.startDate
+            ? `${customYear}년이지만 ${period.label} 시작일(${period.startDate}) 이전`
+            : `${customYear}년이지만 ${period.label} 종료일(${period.endDate}) 이후`;
+        yearOnlyMismatchItems.push({
+          id: item.id,
+          title: cleanTitle,
+          itemDateRange: item.customDateDot,
+          reason,
+        });
+      }
+      return;
+    }
+
+    // 2. 기본 상태 (연도 단위 예상 시기): 생일로 임의 판정하지 않음
     const hasYearOverlap =
-      itemStartYear <= period.endYear && itemEndYear >= period.startYear;
+      item.startYear <= period.endYear && item.endYear >= period.startYear;
+    if (!hasYearOverlap) return;
 
-    if (hasDateOverlap) {
-      const isCompletelyInside =
-        item.startDateStr >= period.startDate && item.endDateStr <= period.endDate;
-      const isPartialOverlap = !isCompletelyInside;
+    const isStrictlyInterior =
+      item.startYear > period.startYear && item.endYear < period.endYear;
+
+    if (isStrictlyInterior) {
       matchedItems.push({
         id: item.id,
         title: cleanTitle,
-        isPartialOverlap,
-        label: isPartialOverlap
-          ? `${cleanTitle} (일부 기간 걸침: ${item.startDateStr}~${item.endDateStr})`
-          : cleanTitle,
+        isBoundaryYearEstimate: false,
+        label: cleanTitle,
       });
-    } else if (hasYearOverlap) {
-      const reason =
-        item.endDateStr < period.startDate
-          ? `${itemEndYear}년이지만 ${period.label} 시작일(${period.startDate}) 이전 발생`
-          : `${itemStartYear}년이지만 ${period.label} 종료일(${period.endDate}) 이후 발생`;
-      yearOnlyMismatchItems.push({
+    } else {
+      // 구간 시작/종료 경계 연도에 걸치거나 다년도 항목이 두 구간에 걸치는 경우
+      const yearLabel =
+        item.startYear === item.endYear
+          ? `${item.startYear}년경`
+          : `${item.startYear}~${item.endYear}년`;
+      matchedItems.push({
         id: item.id,
         title: cleanTitle,
-        itemDateRange:
-          item.startDateStr === item.endDateStr
-            ? item.startDateStr
-            : `${item.startDateStr}~${item.endDateStr}`,
-        reason,
+        isBoundaryYearEstimate: true,
+        label: `${cleanTitle} (${yearLabel} 예상 · 구간 경계일 확인 필요)`,
       });
     }
   });
 
   const matchedText =
-    matchedItems.map((m) => m.label).join(', ') || '해당 날짜 구간에 겹치는 항목 없음';
+    matchedItems.map((m) => m.label).join(', ') || '해당 기간에 겹치는 예상 항목 없음';
   const mismatchNote =
     yearOnlyMismatchItems.length > 0
-      ? ` (※ 연도는 같으나 날짜상 제외: ${yearOnlyMismatchItems
+      ? ` (※ 지정일 기준 다른 구간: ${yearOnlyMismatchItems
           .map((x) => `${x.title} [${x.reason}]`)
           .join(', ')})`
       : '';
@@ -960,7 +1117,11 @@ export function generateAgeYearTable(
     const startingPeriod = periods.find((p) => p.startYear === year);
     const endingPeriod = periods.find((p) => p.endYear === year);
 
-    if (startingPeriod && endingPeriod && startingPeriod.periodNumber !== endingPeriod.periodNumber) {
+    if (
+      startingPeriod &&
+      endingPeriod &&
+      startingPeriod.periodNumber !== endingPeriod.periodNumber
+    ) {
       giftStatusLabel = `${endingPeriod.label} 종료(${endingPeriod.endDate}) · ${startingPeriod.label} 구간 시작 (${startingPeriod.startDate})`;
       isPeriodStart = true;
     } else if (startingPeriod) {
@@ -969,7 +1130,6 @@ export function generateAgeYearTable(
     } else if (endingPeriod) {
       giftStatusLabel = `${endingPeriod.label} 구간 종료 (${endingPeriod.endDate})`;
     } else {
-      // 해당 연도가 어느 구간의 계약 기간(startYear < year < endYear)에 속하는지 확인
       const activePeriod = periods.find(
         (p) => year > p.startYear && year < p.endYear
       );

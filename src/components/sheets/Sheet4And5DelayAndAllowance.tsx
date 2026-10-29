@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   GiftPeriod,
   DelaySimulationRow,
@@ -24,6 +24,7 @@ interface Sheet4To6Props {
   checkedMap: Record<string, boolean>;
   checkedAmountMap: Record<string, number>;
   onToggleCheck: (id: string) => void;
+  onConfirmUnverifiedAmounts: (amountWon: number) => void;
   memoMap: Record<string, string>;
   onChangeMemo: (key: string, value: string) => void;
 }
@@ -37,9 +38,12 @@ export function Sheet4To6DelayAndChecklists({
   checkedMap,
   checkedAmountMap,
   onToggleCheck,
+  onConfirmUnverifiedAmounts,
   memoMap,
   onChangeMemo,
 }: Sheet4To6Props) {
+  const [manualPastAmountInput, setManualPastAmountInput] = useState<string>('');
+
   // 시트 5: 실제 체크된 아동수당 수령 횟수 집계
   const checkedAllowanceCount = allowanceInfo.rows.reduce((acc, row) => {
     const rowChecked = row.activeMonths.reduce((mAcc, isActive, mIdx) => {
@@ -49,7 +53,7 @@ export function Sheet4To6DelayAndChecklists({
     return acc + rowChecked;
   }, 0);
 
-  // 시트 6: 전체 예정 합계 및 실제 체크 입금 합계 집계
+  // 시트 6: 전체 예정 합계 및 실제 체크 입금 합계 집계 (미확인 금액 건수 분리)
   const totalPlannedWon = installmentRows.reduce(
     (sum, r) => sum + (r.annualAmount || 0),
     0
@@ -60,16 +64,19 @@ export function Sheet4To6DelayAndChecklists({
         row.year,
         row.activeMonths,
         checkedMap,
-        checkedAmountMap,
-        firstPeriod.monthlyPlanned
+        checkedAmountMap
       );
       return {
         checkedCount: acc.checkedCount + info.checkedCount,
+        confirmedCount: acc.confirmedCount + info.confirmedCount,
+        unverifiedCount: acc.unverifiedCount + info.unverifiedCount,
         actualAmountWon: acc.actualAmountWon + info.actualAmountWon,
       };
     },
-    { checkedCount: 0, actualAmountWon: 0 }
+    { checkedCount: 0, confirmedCount: 0, unverifiedCount: 0, actualAmountWon: 0 }
   );
+
+  const cutoffAge35Label = delaySimulations[0]?.cutoffDateAtAge35 || '만 35세 생일';
 
   return (
     <>
@@ -112,14 +119,14 @@ export function Sheet4To6DelayAndChecklists({
         {/* 시작을 미루면 어떻게 달라질까 */}
         <div className="flex items-center justify-between mb-1.5">
           <h3 className="text-sm font-extrabold text-slate-900">
-            시작을 미루면 준비 일정이 어떻게 달라질까
+            시작을 미루면 어떻게 달라질까 (만 35세 생일 기준 비교)
           </h3>
           <span className="sm:hidden text-[10px] text-slate-400 no-print">
             ← 좌우 스크롤 →
           </span>
         </div>
         <div className="table-scroll-wrap mb-2.5">
-          <table className="sheet-table text-center min-w-[520px]">
+          <table className="sheet-table text-center min-w-[540px]">
             <thead>
               <tr>
                 <th className="w-24">시작 시점</th>
@@ -127,7 +134,9 @@ export function Sheet4To6DelayAndChecklists({
                 <th className="w-16">시작 나이</th>
                 <th className="w-18">미성년 구간</th>
                 <th className="w-18">성년 구간</th>
-                <th>성년 기준 전환 시점 · 계획 입금 총액</th>
+                <th>
+                  만 35세 생일({cutoffAge35Label})까지 실제 이체 · 성년 전환
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -145,11 +154,20 @@ export function Sheet4To6DelayAndChecklists({
                   <td className="whitespace-nowrap">{row.adultPeriodCount}구간</td>
                   <td className="text-left px-2.5 py-1.5 leading-snug whitespace-nowrap">
                     <div className="font-extrabold text-slate-900 text-[11px]">
-                      {row.firstAdultPeriodSummary}
+                      만 35세까지 {row.monthsUntilAge35}회 · 총{' '}
+                      {row.plannedManwonUntilAge35.toLocaleString('ko-KR')}만원
+                      {row.diffMonthsFromBase !== 0 && (
+                        <>
+                          {' '}
+                          <span className="ml-1 text-rose-700 font-bold">
+                            ({row.diffMonthsFromBase}회 ·{' '}
+                            {row.diffManwonFromBase.toLocaleString('ko-KR')}만원)
+                          </span>
+                        </>
+                      )}
                     </div>
                     <div className="text-[10px] text-slate-600 font-medium">
-                      만 35세 이전 {row.totalPeriodCount}구간({row.totalPlannedMonths}회) · 계획액 합계{' '}
-                      {row.totalPlannedManwon.toLocaleString('ko-KR')}만원
+                      {row.firstAdultPeriodSummary}
                     </div>
                   </td>
                 </tr>
@@ -159,7 +177,7 @@ export function Sheet4To6DelayAndChecklists({
         </div>
 
         <div className="border border-slate-400 rounded-sm bg-slate-50 px-2.5 sm:px-3 py-2 text-[11px] sm:text-[11.5px] text-slate-700 leading-relaxed mb-5">
-          ※ 시작 시점을 늦추면 <strong className="font-semibold">성년(만 19세 이상, 5,000만원 기준) 구간이 시작되는 연도·나이</strong>와 만 35세까지 실행할 수 있는 준비 구간 수가 달라집니다. 각 구간의 법정 공제 기준액(2,000만·5,000만)을 단순 합산한 금액은 실제 보장된 비과세 총액이 아니므로, 오해를 막기 위해 실제 전환 시점과 가족 계획 입금액 기준으로 비교했습니다.
+          ※ 세 시나리오 모두 <strong className="font-semibold">‘아이의 만 35세 생일({cutoffAge35Label})’이라는 동일한 종료일</strong>까지 실제로 이체되는 횟수와 누적 계획액을 계산했습니다(만 35세 이후 이체분 제외). 시작을 1년 늦추면 만 35세까지 이체할 수 있는 횟수가 줄어들고, 성년(만 19세 이상) 구간 시작 연도도 함께 늦춰집니다.
         </div>
 
         {/* 증여 구간 한눈에 보기 */}
@@ -425,12 +443,58 @@ export function Sheet4To6DelayAndChecklists({
             (현재 월 계획액 {firstPeriod.monthlyPlanned.toLocaleString('ko-KR')}원 기준)
           </div>
           <div className="font-bold text-emerald-800">
-            실제 입금 체크 합계: {totalActualInfo.actualAmountWon.toLocaleString('ko-KR')}원 ({totalActualInfo.checkedCount}/120회 완료)
+            확정 입금 합계: {totalActualInfo.actualAmountWon.toLocaleString('ko-KR')}원 (확정 {totalActualInfo.confirmedCount}회 / 전체 체크 {totalActualInfo.checkedCount}회)
+            {totalActualInfo.unverifiedCount > 0 && (
+              <span className="ml-1.5 text-amber-800 font-extrabold">
+                · 입금액 확인 필요 {totalActualInfo.unverifiedCount}건
+              </span>
+            )}
           </div>
         </div>
 
+        {totalActualInfo.unverifiedCount > 0 && (
+          <div className="no-print flex flex-wrap items-center justify-between gap-2 bg-amber-50 border border-amber-300 rounded px-2.5 py-2 mb-2 text-[11px] text-amber-950">
+            <span>
+              ⚠️ 이전 기록에서 금액 없이 체크만 저장된 항목이{' '}
+              <strong className="font-bold">
+                {totalActualInfo.unverifiedCount}건
+              </strong>{' '}
+              있습니다. 현재 설정값으로 자동 계산하지 않으므로 당시 실제 월 입금액을 직접 입력해 확정해 주세요.
+            </span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={manualPastAmountInput}
+                onChange={(e) => setManualPastAmountInput(e.target.value)}
+                placeholder="당시 월 입금액(원)"
+                aria-label="미확인 과거 체크 항목의 실제 월 입금액(원)"
+                className="w-32 px-2 py-1 text-xs font-bold border border-amber-400 rounded bg-white"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const parsed = Number(manualPastAmountInput);
+                  if (
+                    manualPastAmountInput.trim() !== '' &&
+                    Number.isFinite(parsed) &&
+                    parsed >= 0
+                  ) {
+                    onConfirmUnverifiedAmounts(Math.floor(parsed));
+                    setManualPastAmountInput('');
+                  }
+                }}
+                className="px-2.5 py-1 rounded bg-amber-800 hover:bg-amber-900 text-white font-bold cursor-pointer"
+              >
+                미확인 건 금액 확정
+              </button>
+            </div>
+          </div>
+        )}
+
         <p className="text-[11px] text-slate-700 leading-relaxed mb-2">
-          매월 {firstPeriod.startDate.split('.')[2]}일 이체 후 해당 월을 체크하세요. <strong className="font-bold">‘그해 줄 돈(예정)’</strong>은 현재 설정한 월 계획액 기준이며, <strong className="font-bold">‘실제 입금 확인’</strong>은 체크할 당시의 월 금액으로 별도 저장되어 이후 월 계획액을 변경해도 과거 실제 입금 합계가 바뀌지 않습니다.
+          매월 {firstPeriod.startDate.split('.')[2]}일 이체 후 해당 월을 체크하세요. <strong className="font-bold">‘그해 줄 돈(예정)’</strong>은 현재 설정한 월 계획액 기준이며, <strong className="font-bold">‘실제 입금 확인’</strong>은 체크 시점에 기록된 금액만 합산합니다(금액 정보가 없는 과거 체크는 직접 입력 전까지 확정 합계에서 제외).
         </p>
 
         <div className="sm:hidden text-right text-[10px] text-slate-400 mb-1 no-print">
@@ -451,10 +515,10 @@ export function Sheet4To6DelayAndChecklists({
                   <br />
                   <span className="text-[9.5px] font-normal">기간 · 횟수 × 월 계획액</span>
                 </th>
-                <th className="w-26">
+                <th className="w-28">
                   실제 입금 확인
                   <br />
-                  <span className="text-[9.5px] font-normal">체크 시점 금액 합산</span>
+                  <span className="text-[9.5px] font-normal">확정 금액만 합산</span>
                 </th>
                 <th className="w-22">비고·메모</th>
               </tr>
@@ -465,8 +529,7 @@ export function Sheet4To6DelayAndChecklists({
                   row.year,
                   row.activeMonths,
                   checkedMap,
-                  checkedAmountMap,
-                  firstPeriod.monthlyPlanned
+                  checkedAmountMap
                 );
                 return (
                   <tr key={row.year}>
@@ -508,8 +571,13 @@ export function Sheet4To6DelayAndChecklists({
                         {actualRow.actualAmountWon.toLocaleString('ko-KR')}원
                       </div>
                       <div className="text-[9.5px] text-slate-500">
-                        {actualRow.checkedCount}/{row.count}회 체크
+                        확정 {actualRow.confirmedCount}/{row.count}회
                       </div>
+                      {actualRow.unverifiedCount > 0 && (
+                        <div className="text-[9px] font-bold text-amber-800">
+                          입금액 확인 필요 ({actualRow.unverifiedCount}건)
+                        </div>
+                      )}
                     </td>
                     <td className="p-0">
                       <input

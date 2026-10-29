@@ -455,26 +455,44 @@ export function Sheet7To9PocketLumpSumAge({
                     <div className="whitespace-pre-line font-semibold">
                       {item.timingAgeLabel}
                     </div>
-                    <div className="text-slate-600">{item.timingYearLabel}</div>
-                    <div className="no-print mt-1 flex items-center justify-center gap-0.5 text-[9.5px] text-slate-600">
-                      <span>시작 만</span>
+                    <div className="text-slate-600">
+                      {item.customDateDot
+                        ? `지정일: ${item.customDateDot}`
+                        : item.timingYearLabel}
+                    </div>
+                    <div className="no-print mt-1 flex flex-col items-center gap-1 text-[9.5px] text-slate-600">
+                      <div className="flex items-center justify-center gap-0.5">
+                        <span>만</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={45}
+                          value={item.targetAge}
+                          onChange={(e) =>
+                            onUpdateExpenseOverride(item.id, {
+                              targetAge: Math.max(
+                                0,
+                                Math.min(45, Number(e.target.value) || 0)
+                              ),
+                            })
+                          }
+                          aria-label={`${item.title.replace(/\n/g, ' ')} 예상 시작 만 나이`}
+                          className="w-10 px-1 py-0.5 text-center font-bold border border-slate-300 rounded bg-white"
+                        />
+                        <span>세경</span>
+                      </div>
                       <input
-                        type="number"
-                        min={0}
-                        max={45}
-                        value={item.targetAge}
+                        type="date"
+                        value={item.customDate || ''}
                         onChange={(e) =>
                           onUpdateExpenseOverride(item.id, {
-                            targetAge: Math.max(
-                              0,
-                              Math.min(45, Number(e.target.value) || 0)
-                            ),
+                            customDate: e.target.value || undefined,
                           })
                         }
-                        aria-label={`${item.title.replace(/\n/g, ' ')} 예상 시작 만 나이`}
-                        className="w-10 px-1 py-0.5 text-center font-bold border border-slate-300 rounded bg-white"
+                        title="정확한 예정일이 정해진 경우에만 선택하세요 (비워두면 연도 단위로만 추정)"
+                        aria-label={`${item.title.replace(/\n/g, ' ')} 직접 지정 예정일(선택)`}
+                        className="w-26 px-1 py-0.5 text-[9px] border border-slate-200 rounded bg-white text-slate-600"
                       />
-                      <span>세</span>
                     </div>
                   </td>
                   <td className="text-[10.5px] text-slate-700 leading-snug align-middle">
@@ -562,9 +580,9 @@ export function Sheet7To9PocketLumpSumAge({
           <br />• <strong className="font-semibold">그 외 항목(예산 예시):</strong> 자취 보증금·어학연수·취업 준비·결혼 준비·신혼집 금액은 국가 공식 평균이나 필수 비용이 아니라 원본 바인더의 참고 예산 예시입니다. 결혼 시점과 주거 지원 여부는 선택 가능한 가정으로 두었습니다.
         </div>
 
-        {/* 증여 구간과 겹쳐보면 (실제 날짜 기준 비교) */}
+        {/* 증여 구간과 겹쳐보면 (연도 추정 및 지정일 비교) */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-1.5">
-          증여 구간과 겹쳐보면 (구간 시작일~종료일 실제 날짜 기준)
+          증여 구간과 겹쳐보면 (예상 시기 · 구간 경계 비교)
         </h3>
         <div className="table-scroll-wrap mb-2">
           <table className="sheet-table sheet-table-compact">
@@ -573,7 +591,7 @@ export function Sheet7To9PocketLumpSumAge({
                 <th className="w-14 sm:w-18">증여 구간</th>
                 <th className="w-28 sm:w-36">실제 계약 기간</th>
                 <th className="w-18 sm:w-22">공제 기준</th>
-                <th className="text-left">해당 날짜 구간 안에 필요한 목돈 (날짜 비교)</th>
+                <th className="text-left">그 10년 구간과 겹치는 목돈 예상 시기</th>
               </tr>
             </thead>
             <tbody>
@@ -617,7 +635,7 @@ export function Sheet7To9PocketLumpSumAge({
           </table>
         </div>
         <p className="text-[10.5px] text-slate-600 mb-3.5 leading-relaxed">
-          ※ 단순 연도가 아니라 각 증여 구간의 실제 시작일~종료일({firstPeriod.startDate}~)과 목돈 필요 시기(생일 기준 만 나이 도달일)를 비교했습니다. 4년제 대학 등록금처럼 여러 해에 걸치는 비용은 두 구간에 나뉘어 걸칠 수 있으니 실제 납부 학기 날짜를 먼저 확인하세요.
+          ※ 목돈 필요 시기는 기본적으로 연도 단위로만 추정하며(아이 생일로 임의 고정하지 않음), 구간이 바뀌는 경계 연도에 걸친 항목은 실제 납부월(예: 3월 입학 등)이 계약 기간({firstPeriod.startDate}~) 안인지 확인하세요. 위 표에서 예정일을 직접 지정하면 실제 날짜 기준으로 정확히 비교합니다.
         </p>
 
         {/* 자금 대응 전략 체크리스트 */}

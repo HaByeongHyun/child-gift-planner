@@ -5,6 +5,7 @@ import {
   PlannerInput,
   ExpenseOverridesMap,
   ExpenseItemOverride,
+  parseSharedLinkParams,
   calculateGiftPeriods,
   generateCalendarTodos,
   calculateDelaySimulations,
@@ -34,6 +35,7 @@ import {
   ChevronUp,
   SlidersHorizontal,
   Wallet,
+  Check,
 } from 'lucide-react';
 
 const STORAGE_KEY = 'child_gift_planner_v2';
@@ -48,7 +50,7 @@ const DEFAULT_INPUT: PlannerInput = {
   monthlyGiftWon: 200000,
 };
 
-// 캡처본(013.jpeg)의 손글씨 메모장 예시 데이터 (예시 모드 전용, 증여 여부는 단정하지 않도록 예시 참고 표시)
+// 캡처본(013.jpeg)의 손글씨 메모장 예시 데이터 (예시 모드 전용)
 const SAMPLE_POCKET_RECORDS: PocketMoneyRecord[] = [
   {
     id: 'sample-1',
@@ -155,7 +157,7 @@ const SHEET_NAV_ITEMS = [
   { id: 'sheet-9', label: '09. 나이·연도표' },
 ];
 
-type ViewMode = 'own' | 'demo' | 'blank';
+type ViewMode = 'own' | 'demo' | 'blank' | 'shared';
 
 interface UserRecordSnapshot {
   input: PlannerInput;
@@ -224,65 +226,77 @@ export default function ChildGiftPlannerPage() {
       try {
         setHasLegacy(!!localStorage.getItem(LEGACY_KEY));
         const saved = localStorage.getItem(STORAGE_KEY);
-        let baseInput = DEFAULT_INPUT;
+
+        let savedInput = DEFAULT_INPUT;
+        let savedCheckedMap: Record<string, boolean> = {};
+        let savedCheckedAmountMap: Record<string, number> = {};
+        let savedMemoMap: Record<string, string> = {};
+        let savedPocketRecords: PocketMoneyRecord[] = [];
+        let savedExpenseOverrides: ExpenseOverridesMap = {};
+
         if (saved) {
           const parsed = JSON.parse(saved);
           if (!parsed || typeof parsed !== 'object') {
             throw new Error('Invalid storage structure');
           }
-          baseInput = sanitizeInput(parsed.input);
+          savedInput = sanitizeInput(parsed.input);
           if (parsed.checkedMap && typeof parsed.checkedMap === 'object') {
-            setCheckedMap(parsed.checkedMap);
+            savedCheckedMap = parsed.checkedMap;
           }
           if (
             parsed.checkedAmountMap &&
             typeof parsed.checkedAmountMap === 'object'
           ) {
-            setCheckedAmountMap(parsed.checkedAmountMap);
+            savedCheckedAmountMap = parsed.checkedAmountMap;
           }
           if (parsed.memoMap && typeof parsed.memoMap === 'object') {
-            setMemoMap(parsed.memoMap);
+            savedMemoMap = parsed.memoMap;
           }
           if (Array.isArray(parsed.pocketRecords)) {
-            setPocketRecords(
-              parsed.pocketRecords.filter(
-                (r: unknown) => r && typeof r === 'object'
-              )
+            savedPocketRecords = parsed.pocketRecords.filter(
+              (r: unknown) => r && typeof r === 'object'
             );
           }
           if (
             parsed.expenseOverrides &&
             typeof parsed.expenseOverrides === 'object'
           ) {
-            setExpenseOverrides(parsed.expenseOverrides);
+            savedExpenseOverrides = parsed.expenseOverrides;
           }
         }
 
-        // URL 쿼리 파라미터가 있는 경우 입력 조건만 반영 (실제 체크·용돈 기록은 지우지 않음)
-        const params = new URLSearchParams(window.location.search);
-        const qName = params.get('name');
-        const qBirth = params.get('birth');
-        const qStart = params.get('start');
-        const qMonthly = params.get('monthly');
-        const qRate = params.get('rate');
-        const qMsg = params.get('msg');
+        // URL 공유 쿼리 파라미터가 있는 경우:
+        // 기존 내 기록을 덮어쓰거나 기존 체크/용돈과 섞이지 않도록 별도의 'shared(공유 링크 미리보기)' 모드로 연다.
+        const { hasSharedParams, sharedInput } = parseSharedLinkParams(
+          window.location.search,
+          DEFAULT_INPUT
+        );
 
-        if (qName || qBirth || qStart || qMonthly || qRate || qMsg) {
-          baseInput = {
-            childName: qName ?? baseInput.childName,
-            birthDate: qBirth ?? baseInput.birthDate,
-            startDate: qStart ?? baseInput.startDate,
-            monthlyGiftWon: qMonthly
-              ? Math.max(0, Number(qMonthly) || baseInput.monthlyGiftWon)
-              : baseInput.monthlyGiftWon,
-            inflationRate: qRate
-              ? parseFloat(qRate) || baseInput.inflationRate
-              : baseInput.inflationRate,
-            blessingMessage: qMsg ?? baseInput.blessingMessage,
+        if (hasSharedParams) {
+          ownSnapshot.current = {
+            input: savedInput,
+            checkedMap: savedCheckedMap,
+            checkedAmountMap: savedCheckedAmountMap,
+            memoMap: savedMemoMap,
+            pocketRecords: savedPocketRecords,
+            expenseOverrides: savedExpenseOverrides,
           };
+          setViewMode('shared');
+          setInput(sharedInput);
+          setCheckedMap({});
+          setCheckedAmountMap({});
+          setMemoMap({});
+          setPocketRecords([]);
+          setExpenseOverrides({});
+        } else {
+          setViewMode('own');
+          setInput(savedInput);
+          setCheckedMap(savedCheckedMap);
+          setCheckedAmountMap(savedCheckedAmountMap);
+          setMemoMap(savedMemoMap);
+          setPocketRecords(savedPocketRecords);
+          setExpenseOverrides(savedExpenseOverrides);
         }
-
-        setInput(baseInput);
       } catch {
         setStorageBlocked(true);
         setNotice(
@@ -294,7 +308,7 @@ export default function ChildGiftPlannerPage() {
     });
   }, []);
 
-  // LocalStorage 자동 저장 (예시 모드·백지 미리보기 모드·저장 차단 상태에서는 절대 덮어쓰지 않음)
+  // LocalStorage 자동 저장 (예시·백지·공유 미리보기 모드 및 저장 차단 상태에서는 절대 덮어쓰지 않음)
   useEffect(() => {
     if (!isLoaded || viewMode !== 'own' || storageBlocked) return;
     try {
@@ -414,6 +428,26 @@ export default function ChildGiftPlannerPage() {
     }
   };
 
+  // 금액 없이 체크만 저장된 과거 항목에 대해 사용자가 입력한 실제 입금액을 일괄 확정
+  const handleConfirmUnverifiedAmounts = (amountWon: number) => {
+    setCheckedAmountMap((prev) => {
+      const next = { ...prev };
+      Object.keys(checkedMap).forEach((key) => {
+        if (
+          key.startsWith('installment-') &&
+          checkedMap[key] &&
+          typeof next[key] !== 'number'
+        ) {
+          next[key] = amountWon;
+        }
+      });
+      return next;
+    });
+    setNotice(
+      `금액 미확인 체크 항목을 월 ${amountWon.toLocaleString('ko-KR')}원으로 확정했습니다.`
+    );
+  };
+
   const handleChangeMemo = (key: string, value: string) => {
     setMemoMap((prev) => ({
       ...prev,
@@ -484,7 +518,7 @@ export default function ChildGiftPlannerPage() {
     }
   };
 
-  // 예시 보기 진입 / 복원
+  // 예시 보기 진입
   const handleEnterDemo = () => {
     saveOwnSnapshotIfNeeded();
     setViewMode('demo');
@@ -508,8 +542,11 @@ export default function ChildGiftPlannerPage() {
     setNotice('');
   };
 
-  // 예시 또는 백지 양식 모드에서 원래 내 실제 기록으로 복귀
+  // 예시·백지·공유 미리보기 모드에서 원래 내 실제 기록으로 복귀
   const handleReturnToOwnRecord = () => {
+    if (typeof window !== 'undefined' && window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     const own = ownSnapshot.current;
     if (own) {
       setInput(own.input);
@@ -520,6 +557,28 @@ export default function ChildGiftPlannerPage() {
       setExpenseOverrides(own.expenseOverrides);
     }
     setViewMode('own');
+  };
+
+  // 공유 링크 미리보기의 설정을 내 기록으로 명시적 적용 (기존 다른 아이 체크 기록과 섞이지 않도록 새 기록으로 적용)
+  const handleApplySharedLinkToOwn = () => {
+    if (
+      !window.confirm(
+        '현재 공유 링크의 아이 정보와 계획 설정을 내 기록으로 적용할까요?\n(기존에 저장된 다른 기록과 섞이지 않도록 체크·용돈·메모 칸은 빈 상태로 새로 시작합니다.)'
+      )
+    ) {
+      return;
+    }
+    if (typeof window !== 'undefined' && window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    setCheckedMap({});
+    setCheckedAmountMap({});
+    setMemoMap({});
+    setPocketRecords([]);
+    setExpenseOverrides({});
+    ownSnapshot.current = null;
+    setViewMode('own');
+    setNotice('공유 링크의 설정을 내 기록으로 적용했습니다.');
   };
 
   // 내 실제 기록 초기화 (명시적 확인 후 실제 저장 기록만 비움, v1 원본은 보존)
@@ -584,7 +643,7 @@ export default function ChildGiftPlannerPage() {
           : []
       );
       setNotice(
-        '이전 버전(v1) 기록을 가져왔습니다. 예시 기록이 섞여 있는지 확인해 주시고, 용돈의 증여 해당 여부는 계좌 기준 오판을 막기 위해 모두 ‘미확인’으로 전환했습니다.'
+        '이전 버전(v1) 기록을 가져왔습니다. 과거 체크 항목은 당시 입금액을 확인해 주시고, 용돈의 증여 해당 여부는 계좌 기준 오판을 막기 위해 모두 ‘미확인’으로 전환했습니다.'
       );
     } catch {
       setNotice(
@@ -671,7 +730,7 @@ export default function ChildGiftPlannerPage() {
               </button>
             </div>
 
-            {/* 액션 버튼 그룹 (모바일 자동 줄바꿈, 예시 보기 / 백지 양식 보기 / 내 기록 초기화 명확히 분리) */}
+            {/* 액션 버튼 그룹 */}
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
@@ -722,6 +781,25 @@ export default function ChildGiftPlannerPage() {
                   <FileText className="w-3.5 h-3.5" />
                   백지 양식 보기(인쇄용)
                 </button>
+              )}
+
+              {viewMode === 'shared' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleApplySharedLinkToOwn}
+                    className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />이 공유 설정을 내 기록으로 적용
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReturnToOwnRecord}
+                    className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800 transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />내 실제 기록으로 돌아가기
+                  </button>
+                </>
               )}
 
               {viewMode === 'own' && (
@@ -832,15 +910,15 @@ export default function ChildGiftPlannerPage() {
                 max="1000000000"
                 step="1000"
                 value={input.monthlyGiftWon}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const num = Number(e.target.value);
                   setInput((prev) => ({
                     ...prev,
-                    monthlyGiftWon: Math.min(
-                      1000000000,
-                      Math.max(0, Number(e.target.value) || 0)
-                    ),
-                  }))
-                }
+                    monthlyGiftWon: Number.isFinite(num)
+                      ? Math.min(1000000000, Math.max(0, Math.floor(num)))
+                      : 0,
+                  }));
+                }}
                 className="w-full min-w-0 px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-800"
               />
             </div>
@@ -856,15 +934,15 @@ export default function ChildGiftPlannerPage() {
                 min="0"
                 max="15"
                 value={input.inflationRate}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const num = parseFloat(e.target.value);
                   setInput((prev) => ({
                     ...prev,
-                    inflationRate: Math.max(
-                      0,
-                      Math.min(15, parseFloat(e.target.value) || 0)
-                    ),
-                  }))
-                }
+                    inflationRate: Number.isFinite(num)
+                      ? Math.max(0, Math.min(15, num))
+                      : 0,
+                  }));
+                }}
                 className="w-full min-w-0 px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-800"
               />
             </div>
@@ -889,7 +967,7 @@ export default function ChildGiftPlannerPage() {
             </div>
           </div>
 
-          {/* 시트 빠른 이동 탭 (내부에서만 부드럽게 가로 스크롤) */}
+          {/* 시트 빠른 이동 탭 */}
           <div className="w-full max-w-full overflow-x-auto no-scrollbar pt-2.5 pb-0.5">
             <div className="flex items-center gap-1.5 w-max">
               {SHEET_NAV_ITEMS.map((nav) => (
@@ -918,9 +996,29 @@ export default function ChildGiftPlannerPage() {
               ? '예시 보기 모드 — 지금 화면에서 수정해도 내 실제 기록에는 저장되지 않습니다.'
               : viewMode === 'blank'
               ? '백지 양식 미리보기 모드 — 내 실제 기록은 안전하게 보관 중이며, 현재 화면만 빈 양식으로 표시합니다.'
+              : viewMode === 'shared'
+              ? '공유 링크 미리보기 모드 — 공유받은 계획 조건을 보고 있으며, 내 기존 기록은 덮어쓰지 않고 보관 중입니다.'
               : '내 기록 모드 — 입력한 체크·메모·용돈 기록이 이 기기에만 자동 저장됩니다.'}
           </strong>
-          {viewMode !== 'own' && (
+          {viewMode === 'shared' && (
+            <>
+              <button
+                type="button"
+                className="underline font-bold text-indigo-700 cursor-pointer"
+                onClick={handleApplySharedLinkToOwn}
+              >
+                이 공유 설정을 내 기록으로 적용
+              </button>
+              <button
+                type="button"
+                className="underline font-bold text-emerald-700 cursor-pointer"
+                onClick={handleReturnToOwnRecord}
+              >
+                내 실제 기록으로 돌아가기
+              </button>
+            </>
+          )}
+          {(viewMode === 'demo' || viewMode === 'blank') && (
             <button
               type="button"
               className="underline font-bold text-emerald-700 cursor-pointer"
@@ -972,6 +1070,7 @@ export default function ChildGiftPlannerPage() {
           checkedMap={checkedMap}
           checkedAmountMap={checkedAmountMap}
           onToggleCheck={handleToggleCheck}
+          onConfirmUnverifiedAmounts={handleConfirmUnverifiedAmounts}
           memoMap={memoMap}
           onChangeMemo={handleChangeMemo}
         />
