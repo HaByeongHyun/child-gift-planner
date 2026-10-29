@@ -49,7 +49,7 @@ export function Sheet1To3GiftOverview({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 mb-3">
           <div className="min-w-0 border border-slate-400 rounded-md p-2.5 sm:p-3 bg-slate-50/70">
             <div className="text-[11px] font-semibold text-slate-600 mb-0.5">
-              1차 일반 공제 기준액
+              1차 세금 없는 기본 한도(공제)
             </div>
             <div className="text-base sm:text-xl font-extrabold text-slate-900 mb-0.5 truncate">
               {firstPeriod.deductionLimitManwon.toLocaleString('ko-KR')}만원
@@ -61,43 +61,43 @@ export function Sheet1To3GiftOverview({
 
           <div className="min-w-0 border border-slate-400 rounded-md p-2.5 sm:p-3 bg-slate-50/70">
             <div className="text-[11px] font-semibold text-slate-600 mb-0.5">
-              가족 월 증여 계획액
+              우리 가족 월 증여 계획액
             </div>
             <div className="text-base sm:text-xl font-extrabold text-slate-900 mb-0.5 truncate">
               {firstPeriod.monthlyPlanned.toLocaleString('ko-KR')}원
             </div>
             <div className="text-[10px] sm:text-[10.5px] text-slate-600 leading-tight">
-              120회({((firstPeriod.monthlyPlanned * 120) / 10000).toLocaleString('ko-KR')}만원) · 비과세 최대액 아님
+              10년(120회) 총 {((firstPeriod.monthlyPlanned * 120) / 10000).toLocaleString('ko-KR')}만원 · 직접 정한 금액
             </div>
           </div>
 
           <div className="min-w-0 border border-slate-400 rounded-md p-2.5 sm:p-3 bg-slate-50/70">
             <div className="text-[11px] font-semibold text-slate-600 mb-0.5">
-              첫 증여 신고기한 {firstPeriod.isReportDeadlineConfirmed ? '(2026 공휴일 반영)' : '(잠정)'}
+              첫 증여세 신고 마감일 {firstPeriod.isReportDeadlineConfirmed ? '(확정)' : '(잠정)'}
             </div>
             <div className="text-base sm:text-xl font-extrabold text-slate-900 mb-0.5 truncate">
               {firstPeriod.reportDeadline}
             </div>
             <div className="text-[10px] sm:text-[10.5px] text-slate-600 leading-tight">
-              증여월 말일부터 3개월 · 휴일 연장 반영
+              첫 이체한 달의 말일 + 3개월 (주말·공휴일 연장)
             </div>
           </div>
 
           <div className="min-w-0 border border-slate-400 rounded-md p-2.5 sm:p-3 bg-slate-50/70">
             <div className="text-[11px] font-semibold text-slate-600 mb-0.5">
-              2차 준비 구간 시작
+              다음 10년(2차) 준비 시작일
             </div>
             <div className="text-base sm:text-xl font-extrabold text-slate-900 mb-0.5 truncate">
               {secondPeriod ? secondPeriod.startDate : '-'}
             </div>
             <div className="text-[10.5px] sm:text-[11px] text-slate-600 leading-tight">
-              첫 시작일 + 10년 (준비 점검일)
+              첫 시작일로부터 10년 뒤 점검일
             </div>
           </div>
         </div>
 
         <p className="border border-slate-400 bg-slate-50/60 p-2.5 sm:p-3 mb-4 text-xs text-slate-800 leading-relaxed">
-          <strong className="font-bold">핵심 기준:</strong> 아래 1~4차 구간은 첫 시작일로부터 10년씩 나눈 <strong className="font-bold">가족 준비 일정</strong>이며, 고정된 날짜마다 공제 한도가 자동 초기화되지는 않습니다. 과거 증여 내역을 입력받지 않으므로 개인별 남은 공제 한도나 비과세 최대액은 산출하지 않고, 가족이 정한 월 계획액을 기준으로 일정을 정리합니다.
+          <strong className="font-bold">💡 처음 보시는 부모님을 위한 핵심 안내:</strong> 아래 1~4차 구간은 아이가 자라는 동안 <strong className="font-bold">10년 단위로 미리 짜보는 우리 가족 준비 일정표</strong>입니다. 세금 없이 줄 수 있는 한도(미성년 2,000만원 / 성년 5,000만원)는 달력처럼 10년마다 자동 리셋되는 것이 아니라, <strong className="font-bold">‘새로 돈을 주는 날로부터 딱 과거 10년 동안 얼마를 줬는지’</strong>를 합산해 계산합니다. 예전에 이미 준 돈이 있는지는 가족마다 다르므로, 이 표는 세금 면제 최대치를 임의로 단정하지 않고 부모님이 직접 정한 월 계획액을 기준으로 정리합니다.
         </p>
 
         {/* 증여 구간표 (만 35세까지) */}
@@ -116,7 +116,11 @@ export function Sheet1To3GiftOverview({
                 <th className="w-11">구간</th>
                 <th className="w-22">시작 예정일</th>
                 <th className="w-16">그때 나이</th>
-                <th className="w-24">일반 공제 기준</th>
+                <th className="w-24">
+                  세금 없는 기본 한도
+                  <br />
+                  <span className="text-[10px] font-normal">(일반 공제 기준)</span>
+                </th>
                 <th className="w-28">준비 기간 (120회)</th>
                 <th className="w-32">
                   월 증여 계획액
@@ -126,7 +130,7 @@ export function Sheet1To3GiftOverview({
                 <th className="w-24">
                   10년 공제 기준액
                   <br />
-                  <span className="text-[10px] font-normal">(법정 기준 참고)</span>
+                  <span className="text-[10px] font-normal">(법정 기본 한도)</span>
                 </th>
                 <th className="w-24">신고기한</th>
               </tr>
@@ -166,7 +170,7 @@ export function Sheet1To3GiftOverview({
               ))}
               <tr>
                 <td className="font-bold bg-slate-50 whitespace-nowrap">별도</td>
-                <td className="font-semibold whitespace-nowrap">자녀의 혼인·출산</td>
+                <td className="font-semibold whitespace-nowrap">자녀의 결혼·출산</td>
                 <td className="whitespace-nowrap">성년 이후</td>
                 <td className="font-semibold whitespace-nowrap">
                   통합 1억원 추가
@@ -182,15 +186,15 @@ export function Sheet1To3GiftOverview({
           </table>
         </div>
 
-        <div className="border border-slate-400 p-3 text-xs space-y-1.5 leading-relaxed text-slate-800">
+        <div className="border border-slate-400 p-3 text-xs space-y-2 leading-relaxed text-slate-800">
           <p>
-            • <strong className="font-bold">직계존속(부모·조부모) 합산 규칙:</strong> 증여재산 공제는 증여받는 자녀(수증자) 기준으로 직전 10년 이내 부모·조부모에게 공제받은 금액을 합산해 미성년 2,000만원, 성년(만 19세 이상) 5,000만원 한도를 확인합니다.
+            • <strong className="font-bold">부모·조부모가 준 돈은 하나로 합쳐서 계산해요 (직계존속 합산):</strong> 세금 없이 줄 수 있는 한도(미성년 10년간 2,000만원, 만 19세 이상 성년 10년간 5,000만원)는 엄마·아빠·친조부모·외조부모 각자 따로가 아니라, <strong className="font-bold">돈을 받는 아이 기준으로 최근 10년 동안 부모님과 양가 조부모님에게 받은 돈을 모두 합쳐서</strong> 따집니다.
           </p>
           <p>
-            • <strong className="font-bold">유기정기금(기간을 정해 매달 일정 금액을 주기로 약정하는 증여):</strong> 세법상 연 3% 복리 할인 평가는 사전 증여계약과 최초 이체분 신고 등 요건을 갖춰야 하며, 중도 변경·해지 시 평가 방식이 달라지므로 이 도구는 할인 최대 월액을 확정 제시하지 않습니다.
+            • <strong className="font-bold">매달 나눠 주는 약속 증여(유기정기금)란?:</strong> 목돈을 한 번에 주는 대신 “앞으로 10년(120개월) 동안 매달 일정 금액을 주겠다”고 미리 계약서를 쓰고 첫 달 이체 후 세무서에 신고하는 방법입니다. 세법상 미래에 받을 돈을 연 3%로 할인해 주는 계산법이 있지만, 계약 방식이나 중간에 금액을 바꿀 때 세금 계산이 달라질 수 있어 이 도구는 무리한 할인 최대치 대신 가족이 정한 월 금액으로 안전하게 계획하도록 돕습니다.
           </p>
           <p>
-            • <strong className="font-bold">혼인·출산 공제 주의:</strong> 자녀 본인이 태어났을 때가 아니라, 자녀가 자라서 <strong className="font-bold">결혼(혼인신고일 전후 2년)</strong>하거나 <strong className="font-bold">자녀의 아이를 출산·입양(출생일로부터 2년)</strong>할 때 직계존속에게 받는 증여에 통합 1억원이 추가 적용됩니다.
+            • <strong className="font-bold">‘혼인·출산 1억원 추가 공제’는 언제 쓰나요?:</strong> 지금 우리 아기가 태어났다고 1억원 한도가 생기는 것이 아닙니다. 나중에 우리 아이가 어른이 되어 <strong className="font-bold">결혼할 때(혼인신고일 전후 2년 이내)</strong> 또는 <strong className="font-bold">자녀의 아이(손주)를 낳거나 입양할 때(출생일로부터 2년 이내)</strong> 부모·조부모가 보태주는 자금에 기본 한도(5,000만원)와 별도로 <strong className="font-bold">합쳐서 1억원까지 세금을 더 면제</strong>해 주는 제도입니다.
           </p>
           <p className="text-[11px] text-slate-600 pt-0.5">
             공식 근거:{' '}
@@ -226,8 +230,8 @@ export function Sheet1To3GiftOverview({
           </span>
         </div>
         <p className="text-[11.5px] sm:text-xs text-slate-700 mb-3 leading-relaxed">
-          첫 예정일({firstPeriod.startDate})부터 10년 단위로 정리한 주요 일정입니다. 매월{' '}
-          {startParsed.day}일 이체 후 확인하고, 매년 {startParsed.month}월에는 통장 거래내역서를 뽑아 보관하세요.
+          첫 예정일({firstPeriod.startDate})부터 10년 단위로 챙겨야 할 핵심 일정입니다. 매달{' '}
+          {startParsed.day}일에 이체한 뒤 확인하고, 매년 {startParsed.month}월에는 1년치 통장 거래내역서를 뽑아 이 바인더에 함께 끼워 두세요. (나중에 아이가 집을 사거나 목돈을 쓸 때 정당하게 증여받아 모은 자금임을 증명하는 소중한 자료가 됩니다.)
         </p>
 
         <div className="table-scroll-wrap">
@@ -280,30 +284,30 @@ export function Sheet1To3GiftOverview({
           </span>
         </div>
         <p className="text-xs text-slate-600 mb-2.5">
-          새 10년 준비 구간을 시작할 때마다 아래 순서로 점검합니다.
+          새로운 10년 준비 구간을 시작할 때마다 아래 1~5번 순서대로 차근차근 진행해 보세요.
         </p>
 
         <div className="border border-slate-400 rounded-sm divide-y divide-slate-300 text-[11.5px] sm:text-xs mb-4">
           {[
             {
               id: 'step-1-cancel-prev',
-              text: '이전 구간 자동이체 종료 확인 (1차는 해당 없음)',
+              text: '1단계: 이전 10년 구간 자동이체가 끝났는지 확인하기 (처음 시작하는 1차 구간은 건너뛰세요)',
             },
             {
               id: 'step-2-contract',
-              text: '증여계약서 작성 (증여자·수증자·시작일·종료일·월 이체 금액 명시)',
+              text: '2단계: 증여계약서 작성하기 (주는 부모 이름 · 받는 아이 이름 · 시작일~종료일 · 매달 보낼 금액을 적고 도장/서명)',
             },
             {
               id: 'step-3-autotransfer',
-              text: `매월 ${startParsed.day}일 자동이체 등록`,
+              text: `3단계: 은행 앱에서 매월 ${startParsed.day}일 아이 계좌로 자동이체 등록하기`,
             },
             {
               id: 'step-4-hometax',
-              text: '첫 이체일이 속한 달의 말일부터 3개월 이내 홈택스 증여세 신고 진행',
+              text: '4단계: 첫 달 돈을 보낸 뒤, 그 달 말일로부터 3개월 안에 국세청 홈택스(또는 손택스 앱)에서 증여세 신고하기 (세금이 0원이어도 신고해 두어야 증빙이 남습니다)',
             },
             {
               id: 'step-5-adult-account',
-              text: '성년 구간(만 19세 이후)부터는 자녀 본인이 직접 신고·계좌 관리하도록 안내',
+              text: '5단계: 아이가 성년(만 19세)이 된 이후 구간부터는 아이 본인이 직접 신고하고 계좌를 관리하도록 함께 안내하기',
             },
           ].map((item) => (
             <div
@@ -332,7 +336,7 @@ export function Sheet1To3GiftOverview({
               <tr>
                 <th className="w-12">구간</th>
                 <th className="w-24">시작일</th>
-                <th>그때 나이 · 일반 공제 기준</th>
+                <th>그때 나이 · 세금 없는 기본 한도</th>
                 <th className="w-32">월 증여 계획액</th>
                 <th className="w-24">신고기한</th>
                 <th className="w-12">완료</th>
@@ -382,15 +386,15 @@ export function Sheet1To3GiftOverview({
           {[
             {
               id: 'monthly-check-1',
-              text: '약정한 날짜·금액대로 이체됐는지 확인 (통장 적요에 "정기금 증여" 표시)',
+              text: '약속한 날짜와 금액대로 잘 빠져나갔는지 확인하기 (받는 아이 통장 메모에 "정기금 증여"라고 찍히게 설정하면 나중에 알아보기 쉽습니다)',
             },
             {
               id: 'monthly-check-2',
-              text: '미이체된 달이 있으면 약정 내용에 맞게 보충 이체 후 비고란에 사유 기록',
+              text: '잔액 부족 등으로 못 보낸 달이 있다면 계약 내용에 맞게 보충 이체하고 시트 06 비고란에 이유 적어두기',
             },
             {
               id: 'monthly-check-3',
-              text: '자녀 계좌에 입금된 돈을 부모 계좌로 다시 빼서 쓰지 않기 (혼용 주의)',
+              text: '아이 계좌에 넣어준 돈을 부모 계좌로 다시 빼서 쓰지 않기 (부모 생활비 등으로 섞어 쓰면 세무서에서 처음부터 증여가 아니었던 것으로 오해할 수 있어요)',
             },
           ].map((item) => (
             <div
@@ -420,11 +424,11 @@ export function Sheet1To3GiftOverview({
           {[
             {
               id: 'caution-check-1',
-              text: '연 1회 통장 거래내역서와 증여세 신고서 접수증을 함께 출력해 바인더에 보관하기',
+              text: '1년에 한 번은 아이 통장 거래내역서와 홈택스 증여세 신고 접수증을 종이로 뽑아 이 바인더에 함께 보관하기',
             },
             {
               id: 'caution-check-2',
-              text: '아이 계좌에 입금할 때 보낸 사람과 명목을 통장 메모에 남기기 (예: 설날 조부모 용돈, 1차 정기금)',
+              text: '아이 계좌로 돈을 넣을 때마다 누가 무슨 일로 준 돈인지 통장 메모 남기기 (예: 설날 친할머니 세뱃돈, 1차 정기금 증여)',
             },
           ].map((item) => (
             <div
@@ -448,24 +452,24 @@ export function Sheet1To3GiftOverview({
 
         {/* 정기금 외에 들어오는 돈 */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-2">
-          정기금 외에 들어오는 돈 구분하기
+          매달 주는 증여 외에 아이에게 들어오는 돈, 세금은 어떨까요?
         </h3>
         <div className="border border-slate-400 rounded-sm divide-y divide-slate-300 text-[11.5px] sm:text-xs">
           {[
             {
               id: 'extra-money-1',
-              bold: '아동수당:',
-              text: '지자체에서 지급하는 수당을 아이 명의 계좌로 직접 수령하면 증여세 비과세 대상입니다.',
+              bold: '국가·지자체 아동수당:',
+              text: '정부나 지자체에서 나오는 아동수당·부모급여를 아이 명의 계좌로 바로 받으면 부모가 준 돈이 아니므로 증여세가 붙지 않습니다(비과세).',
             },
             {
               id: 'extra-money-2',
-              bold: '학비·생활비:',
-              text: '사회통념상 인정되는 교육비·치료비 등을 필요할 때마다 직접 지출하면 비과세이나, 이를 모아 예금·주식·부동산 자금으로 쓰면 증여로 봅니다.',
+              bold: '학비·병원비·일상 생활비:',
+              text: '학교 등록금, 학원비, 병원비, 평소 용돈처럼 그때그때 써서 사라지는 돈은 세금 대상이 아닙니다. 하지만 생활비 명목으로 받은 돈을 안 쓰고 모아 예금·주식·집 사는 데 쓰면 증여로 봅니다.',
             },
             {
               id: 'extra-money-3',
-              bold: '세뱃돈·용돈·조부모 증여:',
-              text: '현금이나 용돈통장에 두었다는 이유만으로 비과세가 되지는 않습니다. 금융투자 등에 활용하면 증여 합산 대상이 될 수 있으므로 시트 07에 기록해 관리하세요.',
+              bold: '세뱃돈·돌잔치 돈·조부모님 용돈:',
+              text: '현금이나 일반 용돈통장에 넣어두었다고 무조건 세금이 면제되는 것은 아닙니다. 이 돈을 차곡차곡 모아 주식·예금 등 아이 자산을 불리는 데 쓰면 증여 한도에 합산될 수 있으니 시트 07에 꼭 적어 관리하세요.',
             },
           ].map((item) => (
             <div

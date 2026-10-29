@@ -136,7 +136,7 @@ export function Sheet7To9PocketLumpSumAge({
         </div>
 
         <div className="border border-slate-400 bg-slate-50/60 p-2.5 sm:p-3 text-[11.5px] sm:text-xs leading-relaxed mb-3 text-slate-800">
-          <strong className="font-bold">작성 원칙:</strong> 받은 날짜·연도·준 사람·금액·보관처와 사용 목적을 함께 적으세요. 현금이나 용돈통장에 보관한다는 이유만으로 자동 비과세가 되지 않으며, 증권계좌에 넣었다고 무조건 과세되는 것도 아닙니다. 증여 해당 여부는 기본 <strong className="font-semibold">‘미확인’</strong>으로 두고, 세무 요건을 확인한 경우에만 직접 <strong className="font-semibold">O(증여 합산)</strong> 또는 <strong className="font-semibold">X(비과세 확인)</strong>를 선택하세요.
+          <strong className="font-bold">💡 쉽게 적는 세뱃돈·용돈 장부:</strong> 명절 세뱃돈이나 생일·돌잔치 용돈을 받았을 때 언제, 누가, 얼마를 주셨고 어디에 보관했는지 함께 적어 두세요. 흔히 “현금이나 용돈통장에 넣어두면 무조건 세금이 없고, 증권계좌에 넣으면 무조건 세금을 낸다”고 오해하기 쉽지만 그렇지 않습니다. 아이 간식·장난감·학용품처럼 <strong className="font-semibold">그때그때 써서 사라지는 용돈은 비과세(X)</strong>이지만, 쓰지 않고 모아 <strong className="font-semibold">예금·주식·청약 등 아이 재산(목돈)으로 불려 주려면 증여 합산 대상(O)</strong>이 될 수 있습니다. 아직 헷갈리는 항목은 기본값인 <strong className="font-semibold">‘미확인’</strong>으로 두고 나중에 확인해 바꾸셔도 됩니다.
         </div>
 
         <div className="sm:hidden text-right text-[10px] text-slate-400 mb-1 no-print">
@@ -309,12 +309,12 @@ export function Sheet7To9PocketLumpSumAge({
 
         <p className="text-[10.5px] text-slate-600 mb-2 leading-relaxed">
           <strong className="font-semibold">보관 계좌·장소</strong> — 현금 / 용돈통장 / 증권계좌 &nbsp;|&nbsp;{' '}
-          <strong className="font-semibold">증여 해당</strong> — 미확인(기본) / X(사회통념상 비과세 확인) / O(증여 합산 확인). 보관 계좌만으로 자동 판정하지 않습니다.
+          <strong className="font-semibold">증여 해당</strong> — 미확인(아직 잘 모를 때 기본값) / X(간식·학용품 등 바로 쓰는 비과세 용돈) / O(모아서 불려 줄 증여 합산 돈)
         </p>
 
         {/* 연도별 합계 (증여 해당 O 만 집계) */}
         <h3 className="text-xs font-extrabold text-slate-900 mb-1.5">
-          연도별 합계 (내가 ‘증여 해당 O’로 표시한 금액만 집계)
+          연도별 합계 (내가 ‘증여 해당 O’로 표시한 금액만 자동 합산)
         </h3>
         <div className="table-scroll-wrap mb-2">
           <table className="sheet-table sheet-table-compact text-center min-w-[480px]">
@@ -346,7 +346,7 @@ export function Sheet7To9PocketLumpSumAge({
         </div>
 
         <p className="text-[10.5px] text-slate-600 leading-relaxed">
-          직계존속(부모·조부모)에게 받은 증여는 합산해 10년 공제 한도를 확인합니다. 위 표는 ‘O’로 직접 선택한 기록의 단순 합계이며, 남은 공제 한도나 납부세액을 자동 확정하지 않습니다.
+          부모님과 양가 조부모님(직계존속)에게 받은 증여 돈은 모두 합쳐서 최근 10년 한도(미성년 2,000만원)를 넘는지 확인해야 합니다. 위 표는 부모님이 직접 ‘O(증여 합산)’로 선택한 금액만 더해 보여주며, 세금을 자동으로 확정하지는 않습니다.
         </p>
       </section>
 
@@ -379,7 +379,7 @@ export function Sheet7To9PocketLumpSumAge({
         </div>
 
         <p className="text-[11px] text-slate-700 leading-relaxed mb-2">
-          {birthFormatted}생 · 기준연도는 <strong className="font-bold">2026년</strong>(증여 시작일과 무관)이며, 오른쪽에 <strong className="font-bold">연 {inflationRate}% 물가상승률</strong>을 반영한 예상 금액을 함께 표시합니다. <strong className="font-bold">전체 참고 비용</strong>과 <strong className="font-bold">우리 가족 지원 계획액</strong>을 구분했으며, 결혼 나이·지원 여부·지원 금액을 가족 상황에 맞게 직접 수정할 수 있습니다.
+          {birthFormatted}생 기준 · 지금(<strong className="font-bold">2026년 현재 가격</strong>) 기준으로 얼마가 드는지 먼저 보고, 아이가 그 나이가 되었을 때 <strong className="font-bold">매년 {inflationRate}%씩 물가가 오르면 실제로 얼마가 필요할지</strong>를 오른쪽에 자동 계산했습니다. <strong className="font-bold">‘전체 참고 비용’</strong>과 부모님이 실제로 보태줄 <strong className="font-bold">‘우리 가족 지원 계획’</strong>을 나누었으니, 우리 집 상황에 맞게 나이나 예정일·지원 금액을 자유롭게 바꿔 보세요.
         </p>
 
         <div className="sm:hidden text-right text-[10px] text-slate-400 mb-1 no-print">
@@ -663,49 +663,49 @@ export function Sheet7To9PocketLumpSumAge({
           </table>
         </div>
         <p className="text-[10.5px] text-slate-600 mb-3.5 leading-relaxed">
-          ※ 목돈 필요 시기는 기본적으로 연도 단위로만 추정하며(아이 생일로 임의 고정하지 않음), 구간이 바뀌는 경계 연도에 걸친 항목은 실제 납부월(예: 3월 입학 등)이 계약 기간({firstPeriod.startDate}~) 안인지 확인하세요. 위 표에서 예정일을 직접 지정하면 실제 날짜 기준으로 정확히 비교합니다.
+          ※ 목돈이 들어가는 시기는 기본적으로 ‘몇 년도쯤 필요한지’ 연도 단위로 먼저 보여줍니다(아이 생일에 무조건 돈이 나간다고 임의로 정하지 않아요). 만약 목돈이 필요한 해가 10년 증여 구간이 끝나는 해와 겹친다면, 실제로 돈이 나가는 달(예: 3월 대학교 등록금 납부)이 그 구간 종료일 전인지 확인하거나 위 표에서 <strong className="font-semibold">‘첫 납부 예정일 / 예정일 직접 지정’</strong>에 날짜를 입력해 보세요.
         </p>
 
         {/* 자금 대응 전략 체크리스트 */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-1.5">
-          자금 대응 전략 체크리스트
+          목돈을 준비할 때 놓치기 쉬운 7가지 체크리스트
         </h3>
         <div className="border border-slate-400 rounded-sm divide-y divide-slate-300 text-[11px] leading-snug">
           {[
             {
               id: 'strategy-1',
-              bold: '실제 지출 날짜와 증여 구간 종료일 대조 —',
-              text: '같은 연도라도 몇 월에 돈이 필요한지 확인해 구간 만기 전에 미리 준비하세요.',
+              bold: '돈이 실제 나가는 달(月)과 증여 구간이 끝나는 날 비교하기 —',
+              text: '같은 해라도 3월 입학 때 돈이 필요한지, 10월 이후에 필요한지에 따라 미리 현금화해 둘 시점이 달라집니다.',
             },
             {
               id: 'strategy-2',
-              bold: '누적 입금액과 현재 계좌 잔액 구분 —',
-              text: '등록금·어학연수로 이미 지출한 금액을 이후 결혼·주거 자금에 중복 계산하지 마세요.',
+              bold: '‘지금까지 넣어준 총액’과 ‘통장에 남은 잔액’ 구분하기 —',
+              text: '대학 등록금이나 어학연수로 이미 꺼내 쓴 돈을 나중에 결혼·신혼집 자금에 또 쓸 수 있는 것처럼 중복 계산하지 마세요.',
             },
             {
               id: 'strategy-3',
-              bold: '혼인·출산 공제는 실제 요건 충족 시에만 반영 —',
-              text: '미래 가정만으로 확정 합산하지 말고, 실제 혼인신고일·출생일 기준 2년 요건을 확인하세요.',
+              bold: '결혼·출산 1억 추가 한도는 실제로 결혼·출산할 때만 적용하기 —',
+              text: '어릴 때 미리 당겨 쓸 수 있는 한도가 아니므로, 자녀가 실제로 혼인신고(전후 2년)나 출산(출생 후 2년)을 할 때 요건을 확인해 지원하세요.',
             },
             {
               id: 'strategy-4',
-              bold: '전체 참고 비용과 우리 가족 지원 한도 분리 —',
-              text: '신혼집 2~3억원 등은 참고 예시일 뿐이며, 부모 노후자금을 해치지 않는 범위에서 지원 계획액을 설정하세요.',
+              bold: '남들 평균 비용에 맞추기보다 부모님 노후자금 먼저 지키기 —',
+              text: '신혼집 2~3억원 등은 어디까지나 참고 예시일 뿐입니다. 부모님의 노후 준비를 해치지 않는 선에서 ‘우리 가족 지원 계획액’을 정하세요.',
             },
             {
               id: 'strategy-5',
-              bold: '주택청약 통장 인정 기준 확인 —',
-              text: '청약 가입기간·납입 인정 금액은 제도 개편에 따라 달라지므로 시점별 청약홈 공고를 확인하세요.',
+              bold: '아이 주택청약 통장 인정 나이와 금액 확인하기 —',
+              text: '미성년자 청약 납입 인정 기간과 월 인정 금액은 정책에 따라 바뀌므로 가입·납입 전 청약홈 최신 안내를 확인하세요.',
             },
             {
               id: 'strategy-6',
-              bold: '직계존속(부모·조부모) 과거 10년 증여 합산 점검 —',
-              text: '목돈을 추가 지원하기 전에 직전 10년 내 부모·조부모 증여 공제 사용액을 먼저 확인하세요.',
+              bold: '목돈을 더 보태주기 전에 최근 10년간 부모·조부모 증여 합계 먼저 보기 —',
+              text: '최근 10년 안에 부모님이나 할머니·할아버지가 이미 주신 증여액이 있다면 그만큼 세금 없는 한도가 줄어드니 먼저 합산해 보세요.',
             },
             {
               id: 'strategy-7',
-              bold: '3~5년 주기 물가 및 등록금 재점검 —',
-              text: '실제 물가상승률과 교육부 공시 등록금 변화에 맞춰 계획표를 주기적으로 업데이트하세요.',
+              bold: '3~5년에 한 번씩 실제 물가와 등록금에 맞춰 계획표 다시 보기 —',
+              text: '시간이 지나면서 실제 물가상승률이나 대학 등록금이 달라지면 상단 물가상승률(%)을 조정해 현실에 맞게 업데이트하세요.',
             },
           ].map((item) => (
             <div
@@ -754,7 +754,7 @@ export function Sheet7To9PocketLumpSumAge({
         )}
 
         <p className="text-[10.5px] text-slate-600 mb-2 leading-relaxed">
-          {birthFormatted}생 · 생일이 지나야 만 나이가 올라갑니다. 학교 학년은 출생연도(그 해 3월 입학 가정) 참고 기준이며, 증여 구간은 실제 시작일·종료일을 함께 표시했습니다.
+          {birthFormatted}생 기준 · 세법에서 미성년(만 18세까지)과 성년(만 19세부터)을 나누는 기준은 해가 바뀔 때가 아니라 <strong className="font-semibold">‘그해 아이의 생일날’</strong>입니다. 학교 학년은 출생연도 기준(3월 입학 가정) 참고표이며, 오른쪽에 각 연도별 증여 준비 구간 상태를 함께 표시했습니다.
         </p>
 
         <div className="table-scroll-wrap">

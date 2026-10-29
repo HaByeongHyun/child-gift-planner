@@ -107,27 +107,27 @@ export function Sheet4To6DelayAndChecklists({
         </div>
 
         <p className="text-[11.5px] sm:text-xs text-slate-700 leading-relaxed mb-2.5">
-          <strong className="font-bold text-slate-900">결론:</strong> 증여세 신고기한은 재산을 증여받은 날이 속하는 달의 말일부터 3개월 이내입니다(상속세 및 증여세법 제68조). 만료일이 토요일·일요일·공휴일(대체공휴일 포함) 또는 근로자의 날(5월 1일)이면 그 다음 평일로 연장됩니다(국세기본법 제5조). 2026년 내 만료일은 공식 월력요항 공휴일을 반영한 확정 날짜이며, 2027년 이후 미래 기한은 주말·근로자의 날·월초 양력 공휴일(신정·삼일절)만 먼저 보정한 <strong className="font-semibold">‘잠정’</strong> 날짜입니다.
+          <strong className="font-bold text-slate-900">가장 쉽게 기억하는 신고 마감일:</strong> 아이 계좌로 돈을 보낸 날이 속한 <strong className="font-semibold">‘그 달의 마지막 날로부터 3개월 뒤’</strong>까지 신고하면 됩니다(상속세 및 증여세법 제68조). 만약 마지막 날이 주말(토·일요일)이나 공휴일·근로자의 날(5월 1일)이면 바로 다음 평일까지 자동으로 늘어납니다. 2026년 마감일은 정부 공휴일을 모두 반영한 확정 날짜이고, 2027년 이후 날짜에 붙은 <strong className="font-semibold">‘(잠정)’</strong> 표시는 주말·근로자의 날·신정·삼일절은 이미 반영했으나 아직 정부 발표 전인 먼 미래의 설·추석(음력)·임시공휴일만 그때 가서 한 번 더 확인하면 된다는 뜻입니다.
         </p>
 
         <div className="border border-slate-400 rounded-sm bg-slate-50 px-2.5 sm:px-3 py-2.5 text-[11.5px] sm:text-xs text-slate-800 leading-relaxed mb-5">
-          예) <strong className="font-bold">{firstPeriod.startDate}</strong>에 첫 증여(이체) →{' '}
-          <strong className="font-bold">{firstPeriod.reportDeadline}</strong>까지 신고. 공제 한도 이내라 세금이 0원이어도 신고해 두면 나중에 자금 출처를 입증하는 공식 근거가 됩니다. 다만 단순 자동이체만 걸어두고 정기금 약정·신고 요건을 갖추지 않으면 매월 개별 증여로 볼 수 있으므로 주의하세요.
+          💡 <strong className="font-bold">실제 예시:</strong> <strong className="font-bold">{firstPeriod.startDate}</strong>에 첫 증여(이체)를 했다면 →{' '}
+          <strong className="font-bold">{firstPeriod.reportDeadline}</strong>까지 홈택스에서 신고하세요. 세금 없는 한도 안이라 <strong className="font-semibold">낼 세금이 0원이어도 꼭 신고해 두는 것이 좋습니다.</strong> 나중에 아이가 자라 이 돈으로 주식을 사거나 집을 살 때 “어릴 때 부모에게 정당하게 증여받은 돈”이라는 가장 확실한 공식 증거가 되기 때문입니다. 또한 계약서와 신고 없이 그냥 자동이체만 걸어두면 세무서에서는 10년 계획이 아니라 ‘매달 그때그때 따로 준 돈’으로 볼 수 있으니 첫 달에 계약서 작성과 신고를 함께 챙기세요.
         </div>
 
         {/* 시작 전 준비 */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-2">
-          시작 전 핵심 체크포인트
+          시작 전 꼭 알아둘 3가지 포인트
         </h3>
         <ul className="list-disc pl-4 text-[11.5px] sm:text-xs text-slate-800 space-y-1.5 mb-5">
           <li>
-            첫 시작일은 <strong className="font-bold">가족의 준비 일정을 10년 단위로 나누는 기준일</strong>입니다. 세법상 공제 한도는 고정된 10년마다 자동 초기화되지 않고, 매번 새로 증여하는 날로부터 과거 10년 이내 공제 사용액을 합산해 판단합니다.
+            <strong className="font-bold">“10년마다 한도가 자동 리셋되나요?” → 그렇지 않습니다.</strong> 첫 시작일은 우리 가족이 10년 단위로 계획을 점검하기 위해 나눈 기준일입니다. 세무서에서는 새로 돈을 주는 날을 기준으로 <strong className="font-semibold">‘딱 과거 10년 동안 부모·조부모가 합쳐서 얼마를 줬는지’</strong>를 거꾸로 세어 계산합니다.
           </li>
           <li>
-            미성년 공제 기준(2,000만원)은 <strong className="font-bold">증여일 현재 만 19세 미만</strong>일 때 적용되며, 만 19세 생일 이후 증여분부터 성년 기준(5,000만원)이 적용됩니다.
+            <strong className="font-bold">언제부터 성년 한도(5,000만원)로 늘어나나요?</strong> 돈을 주는 날 기준으로 아이가 <strong className="font-bold">만 19세 미만이면 10년간 2,000만원</strong>, <strong className="font-bold">만 19세 생일이 지난 뒤부터는 10년간 5,000만원</strong> 기준이 적용됩니다.
           </li>
           <li>
-            아이 명의 계좌 개설 → 증여계약서 작성 → 첫 이체 → 기한 내 증여세 신고 순서로 진행합니다.
+            <strong className="font-bold">처음 시작할 때 진행 순서:</strong> ① 아이 명의 계좌 만들기 → ② 증여계약서 쓰기 → ③ 첫 달 돈 보내기(이체) → ④ 3개월 안에 홈택스에 증여세 신고하기 순서로 진행하면 깔끔합니다.
           </li>
         </ul>
 
@@ -192,37 +192,37 @@ export function Sheet4To6DelayAndChecklists({
         </div>
 
         <div className="border border-slate-400 rounded-sm bg-slate-50 px-2.5 sm:px-3 py-2 text-[11px] sm:text-[11.5px] text-slate-700 leading-relaxed mb-5">
-          ※ 세 시나리오 모두 <strong className="font-semibold">‘아이의 만 35세 생일({cutoffAge35Label})’이라는 동일한 종료일</strong>까지 실제로 이체되는 횟수와 누적 계획액을 계산했습니다(만 35세 이후 이체분 제외). 시작을 1년 늦추면 만 35세까지 이체할 수 있는 횟수가 줄어들고, 성년(만 19세 이상) 구간 시작 연도도 함께 늦춰집니다.
+          ※ 세 경우를 공정하게 비교하기 위해 모두 똑같이 <strong className="font-semibold">‘아이의 만 35세 생일({cutoffAge35Label})’까지 실제로 돈이 들어가는 횟수와 총액</strong>만 계산했습니다(만 35세 생일 이후 이체분은 제외). 시작을 1~2년 미루면 만 35세가 될 때까지 적립할 수 있는 횟수가 그만큼 줄어들고, 다음 10년 구간이 돌아오는 시점도 함께 뒤로 밀립니다.
         </div>
 
         {/* 증여 구간 한눈에 보기 */}
         <h3 className="text-sm font-extrabold text-slate-900 mb-2">
-          관계·상황별 증여재산 공제 기준 한눈에 보기
+          누가 줄 때 얼마까지 세금이 없나요? (관계·상황별 세금 없는 한도 한눈에 보기)
         </h3>
         <div className="table-scroll-wrap mb-3">
           <table className="sheet-table">
             <thead>
               <tr>
-                <th className="w-16 sm:w-20 text-center">구분</th>
+                <th className="w-16 sm:w-20 text-center">주는 사람</th>
                 <th className="w-18 sm:w-24 text-center">
-                  수증자 나이
+                  받는 아이 나이
                   <br />
-                  <span className="text-[9.5px] font-normal">(증여일 기준)</span>
+                  <span className="text-[9.5px] font-normal">(돈 받는 날 기준)</span>
                 </th>
                 <th className="w-22 sm:w-28 text-center">
-                  10년 공제 한도
+                  세금 없는 한도
                   <br />
-                  <span className="text-[9.5px] font-normal">(법정 기준액)</span>
+                  <span className="text-[9.5px] font-normal">(10년 공제 기준)</span>
                 </th>
-                <th className="text-left">적용 조건 및 주의할 점</th>
+                <th className="text-left">쉽게 풀어쓴 적용 규칙 및 주의할 점</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td className="text-center font-bold bg-slate-50 whitespace-nowrap">
-                  직계존속
+                  부모·조부모
                   <br />
-                  <span className="text-[10px] font-normal">(미성년)</span>
+                  <span className="text-[10px] font-normal">(미성년 자녀)</span>
                 </td>
                 <td className="text-center whitespace-nowrap">
                   만 0세 ~<br />만 18세
@@ -233,14 +233,14 @@ export function Sheet4To6DelayAndChecklists({
                   2,000만원
                 </td>
                 <td className="text-slate-800 leading-snug">
-                  부모·조부모·외조부모 등 직계존속에게 받은 증여를 모두 합산해 직전 10년 이내 2,000만원까지 공제합니다.
+                  엄마·아빠·친할머니·친할아버지·외할머니·외할아버지(직계존속)에게 받은 돈을 <strong className="font-semibold">모두 합쳐서 최근 10년 동안 2,000만원</strong>까지 세금이 없습니다. (예: 할머니가 500만원을 주셨다면 부모님은 1,500만원까지만 세금 없이 줄 수 있어요.)
                 </td>
               </tr>
               <tr>
                 <td className="text-center font-bold bg-slate-50 whitespace-nowrap">
-                  직계존속
+                  부모·조부모
                   <br />
-                  <span className="text-[10px] font-normal">(성년)</span>
+                  <span className="text-[10px] font-normal">(성년 자녀)</span>
                 </td>
                 <td className="text-center whitespace-nowrap">
                   만 19세
@@ -253,32 +253,34 @@ export function Sheet4To6DelayAndChecklists({
                   5,000만원
                 </td>
                 <td className="text-slate-800 leading-snug">
-                  만 19세 생일부터 성년 한도(5,000만원)가 적용되나, 이번 증여 전 10년 이내에 미성년으로서 공제받은 금액이 있다면 그 금액을 차감하고 남은 한도를 계산합니다.
+                  만 19세 생일부터 한도가 5,000만원으로 올라갑니다. 단, <strong className="font-semibold">최근 10년 안에 미성년일 때 이미 공제받은 금액이 있다면 그만큼을 빼고</strong> 남은 한도를 계산합니다. (예: 만 15세에 2,000만원을 받았다면, 만 19세에는 나머지 3,000만원까지만 세금 없이 더 받을 수 있어요.)
                 </td>
               </tr>
               <tr>
                 <td className="text-center font-bold bg-slate-50 whitespace-nowrap">
                   혼인·출산
                   <br />
-                  <span className="text-[10px] font-normal">(특례)</span>
+                  <span className="text-[10px] font-normal">(성년 후 특례)</span>
                 </td>
                 <td className="text-center whitespace-nowrap">
                   자녀 본인의
                   <br />
-                  혼인·출산 시
+                  결혼·출산 시
                 </td>
                 <td className="text-center font-bold whitespace-nowrap">
                   통합 1억원
                   <br />
-                  <span className="text-[10px] font-normal">(일반공제 별도)</span>
+                  <span className="text-[10px] font-normal">(기본한도 별도)</span>
                 </td>
                 <td className="text-slate-800 leading-snug">
-                  증여받는 자녀 본인이 결혼(혼인신고일 전후 2년 이내)하거나 자녀 본인의 아이를 출산·입양(출생일로부터 2년 이내)할 때 직계존속에게 받는 증여에 통합 1억원이 추가 공제됩니다. (아이 본인의 출생 시점이 아님)
+                  우리 아이가 어른이 되어 <strong className="font-semibold">결혼(혼인신고 전후 2년 이내)</strong>하거나 <strong className="font-semibold">아이(손주)를 출산·입양(출생 후 2년 이내)</strong>할 때 부모·조부모에게 받는 돈에 기본 한도(5,000만원) 외에 추가로 1억원까지 세금을 면제해 줍니다. (지금 아기가 태어났을 때 생기는 한도가 아닙니다!)
                 </td>
               </tr>
               <tr>
                 <td className="text-center font-bold bg-slate-50 whitespace-nowrap">
-                  기타친족
+                  삼촌·이모·고모 등
+                  <br />
+                  <span className="text-[10px] font-normal">(기타친족)</span>
                 </td>
                 <td className="text-center whitespace-nowrap">나이 무관</td>
                 <td className="text-center font-bold whitespace-nowrap">
@@ -287,7 +289,7 @@ export function Sheet4To6DelayAndChecklists({
                   1,000만원
                 </td>
                 <td className="text-slate-800 leading-snug">
-                  6촌 이내 혈족·4촌 이내 인척(삼촌·이모·고모·조부모 외 친족 등) 전체를 합산해 직전 10년 이내 1,000만원 한도를 적용합니다.
+                  부모·조부모를 제외한 친척(삼촌·외삼촌·이모·고모 등 6촌 이내 혈족, 4촌 이내 인척)에게 받은 돈을 <strong className="font-semibold">전부 합쳐서 최근 10년 동안 1,000만원</strong>까지 세금이 없습니다.
                 </td>
               </tr>
             </tbody>
@@ -327,7 +329,7 @@ export function Sheet4To6DelayAndChecklists({
         </div>
 
         <p className="text-[11px] text-slate-700 leading-relaxed mb-2">
-          <strong className="font-bold">주의:</strong> 표의 칸 수({allowanceInfo.totalCount}칸)는 기록 가능한 기간일 뿐 실제 지급을 보장하는 횟수가 아닙니다. 출생 후 60일 이내 신청 여부, 국내 거주·국적 요건, 90일 이상 해외 체류 시 정지, 지자체별 추가 지급 여부에 따라 실제 수령액이 달라지므로 실제로 입금받은 달에만 체크하고 금액을 적으세요.{' '}
+          <strong className="font-bold">💡 참고 및 주의사항:</strong> 국가에서 나오는 아동수당을 아이 명의 통장으로 바로 받으면 증여세가 붙지 않습니다. 다만 아래 표의 칸 수({allowanceInfo.totalCount}칸)는 기록해 둘 수 있는 최대 기간일 뿐 무조건 지급이 보장되는 횟수는 아닙니다. 출생 후 60일 이내 신청 여부, 90일 이상 해외 체류 시 지급 정지, 거주 지역별 추가 수당 여부에 따라 실제 받는 금액이 달라지므로 <strong className="font-semibold">실제로 통장에 입금된 달에만 체크하고 받은 금액을 적어 두세요.</strong>{' '}
           <a
             href="https://www.129.go.kr/faq/faq03.do?searchConsultingKeyword=B12"
             target="_blank"
@@ -787,7 +789,7 @@ export function Sheet4To6DelayAndChecklists({
         )}
 
         <p className="text-[11px] text-slate-700 leading-relaxed mb-2">
-          매월 {firstPeriod.startDate.split('.')[2]}일 이체 후 해당 월을 체크하세요. <strong className="font-bold">‘그해 줄 돈(예정)’</strong>은 현재 설정한 월 계획액 기준이며, <strong className="font-bold">‘실제 입금 확인’</strong>은 체크 시점에 기록된 금액만 합산합니다(금액 정보가 없는 과거 체크는 직접 입력 전까지 확정 합계에서 제외).
+          매달 {firstPeriod.startDate.split('.')[2]}일 아이 계좌로 이체한 뒤 해당 월 칸에 체크하세요. 오른쪽 <strong className="font-bold">‘그해 줄 돈(예정)’</strong>은 현재 설정한 월 계획액으로 계산한 목표 금액이고, <strong className="font-bold">‘실제 입금 확인’</strong>은 체크할 당시 실제로 넣었던 금액만 더해 보여줍니다(나중에 월 계획액을 바꿔도 이미 체크해 둔 과거 입금액은 바뀌지 않아요).
         </p>
 
         <div className="sm:hidden text-right text-[10px] text-slate-400 mb-1 no-print">

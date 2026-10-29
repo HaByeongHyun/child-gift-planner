@@ -400,7 +400,7 @@ export function generateCalendarTodos(periods: GiftPeriod[]): CalendarTodoItem[]
     items.push({
       id: `period-${p.periodNumber}-start`,
       date: p.startDate,
-      description: `${p.label} 준비 구간 시작 (만 ${p.ageAtStart}세, 일반 공제 기준 ${p.deductionLabel}). 증여계약서 작성 및 이체 등록`,
+      description: `${p.label} 준비 구간 시작 (만 ${p.ageAtStart}세 · 세금 없이 줄 수 있는 기본 한도 ${p.deductionLabel}). 증여계약서 작성 후 첫 이체 및 자동이체 등록`,
       periodNumber: p.periodNumber,
     });
 
@@ -408,8 +408,8 @@ export function generateCalendarTodos(periods: GiftPeriod[]): CalendarTodoItem[]
       id: `period-${p.periodNumber}-report`,
       date: p.reportDeadline,
       description: p.isReportDeadlineConfirmed
-        ? `${p.label} 증여세 신고기한 (첫 증여월 말일 + 3개월, 2026년 공휴일·주말 반영)`
-        : `${p.label} 증여세 신고기한 확인 (주말·근로자의 날 보정 완료, 해당 연도 공휴일 추가 확인)`,
+        ? `${p.label} 증여세 신고 마감일 (첫 이체한 달의 말일로부터 3개월 이내 · 2026년 주말·공휴일 연장 반영 완료)`
+        : `${p.label} 증여세 신고 마감일 (첫 이체한 달의 말일로부터 3개월 이내 · 주말·근로자의 날 연장 반영 완료, 그해 음력 공휴일만 추가 확인)`,
       periodNumber: p.periodNumber,
     });
 
@@ -418,7 +418,7 @@ export function generateCalendarTodos(periods: GiftPeriod[]): CalendarTodoItem[]
       items.push({
         id: `period-${p.periodNumber}-precheck`,
         date: p.endDate,
-        description: `${nextPeriod.label} 시작 전 10년 합산 점검 — 직전 10년 내 부모·조부모 증여액과 투자한 용돈 등 공제 사용액 확인`,
+        description: `${nextPeriod.label} 시작 전 10년 합산 점검 — 새로 증여할 날로부터 과거 10년 동안 부모·조부모가 합쳐서 준 돈과 투자에 쓴 용돈이 얼마인지 미리 확인`,
         periodNumber: p.periodNumber,
       });
     }
@@ -426,16 +426,16 @@ export function generateCalendarTodos(periods: GiftPeriod[]): CalendarTodoItem[]
     items.push({
       id: `period-${p.periodNumber}-end`,
       date: p.endDate,
-      description: `${p.label} 120회 마지막 이체일 (계약 종료일 · 공제 한도가 자동 초기화되는 날은 아님)`,
+      description: `${p.label} 120회(10년) 마지막 이체일 (이번 10년 약정 이체가 끝나는 날 · 이날 한도가 자동으로 리셋되는 것은 아니며, 다음 증여일 기준 과거 10년치를 따짐)`,
       periodNumber: p.periodNumber,
     });
   });
 
   items.push({
     id: 'marriage-childbirth-special',
-    date: '성년 후 혼인·출산 증여 시',
+    date: '자녀가 성년이 되어 결혼·출산할 때',
     description:
-      '자녀가 성년이 되어 결혼(혼인신고 전후 2년)하거나 자녀의 아이를 출산·입양(출생일로부터 2년)할 때 부모·조부모에게 받는 증여는 통합 1억원 추가 공제 가능. 신고기한은 실제 증여일이 속한 달의 말일부터 3개월 이내',
+      '우리 아이가 어른이 되어 결혼(혼인신고 전후 2년)하거나 아이(손주)를 출산·입양(출생 후 2년)할 때 부모·조부모가 보태주는 자금은 기본 한도(5,000만원) 외에 통합 1억원까지 추가로 세금이 면제됩니다. (신고기한: 실제 돈을 준 달의 말일로부터 3개월 이내)',
   });
 
   return items;
