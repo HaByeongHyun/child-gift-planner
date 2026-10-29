@@ -1,26 +1,160 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f1f5f9;
+  --foreground: #0f172a;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  word-break: keep-all;
+}
+
+/* A4 용지 시트 스타일 (모바일에서는 화면 꽉 차는 카드, 데스크톱에서는 A4 비율, 인쇄 시 페이지 분할) */
+.a4-sheet {
+  background: #ffffff;
+  color: #111827;
+  width: 100%;
+  max-width: 210mm;
+  margin: 0 auto 1.25rem auto;
+  padding: 16px 12px;
+  box-shadow: 0 4px 16px -4px rgba(15, 23, 42, 0.08);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  .a4-sheet {
+    padding: 24px 20px;
+    margin: 0 auto 1.75rem auto;
+  }
+}
+
+@media (min-width: 820px) {
+  .a4-sheet {
+    padding: 14mm 14mm 12mm 14mm;
+    margin: 0 auto 2rem auto;
+  }
+}
+
+/* 모바일에서 표가 화면을 밀어내지 않도록 감싸는 래퍼 */
+.table-scroll-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 시트 내부 표 공통 스타일 */
+.sheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  line-height: 1.38;
+}
+
+@media (min-width: 640px) {
+  .sheet-table {
+    font-size: 11.5px;
+    line-height: 1.4;
+  }
+}
+
+.sheet-table th,
+.sheet-table td {
+  border: 1px solid #94a3b8;
+  padding: 4px 5px;
+}
+
+@media (min-width: 640px) {
+  .sheet-table th,
+  .sheet-table td {
+    padding: 5px 6px;
+  }
+}
+
+.sheet-table th {
+  background-color: #f1f5f9;
+  font-weight: 700;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+/* 촘촘한 그리드 테이블 (아동수당, 유기정기금, 나이연도표) */
+.sheet-table-compact th,
+.sheet-table-compact td {
+  padding: 3px 3.5px;
+  font-size: 10.5px;
+}
+
+@media (min-width: 640px) {
+  .sheet-table-compact th,
+  .sheet-table-compact td {
+    padding: 3.5px 4px;
+    font-size: 11px;
+  }
+}
+
+/* 가로 스크롤바 숨김 유틸리티 (시트 네비게이션 탭용) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 인쇄 전용 미디어 쿼리 */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    overflow: visible !important;
+    max-width: none !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .table-scroll-wrap {
+    overflow: visible !important;
+  }
+
+  .a4-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 4mm 4mm !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow: visible !important;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .a4-sheet:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
 }
