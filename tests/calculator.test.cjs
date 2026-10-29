@@ -196,3 +196,196 @@ test('공유 링크 쿼리 파싱: monthly=0 및 rate=0이 기본값으로 덮�
   assert.equal(parsed.sharedInput.monthlyGiftWon, 0);
   assert.equal(parsed.sharedInput.inflationRate, 0);
 });
+
+// 3. 3차 검토 요구사항 검증 테스트 (목돈 지정일 비용 연동 & 월별 미확인 입금액 개별 확인·수정)
+test('검증 1·2: 목돈 예정일을 2045-03-01에서 2055-03-01로 바꾸면 물가 반영 금액이 1,599만원에서 2,046만원으로 증가하고, 지우면 기존 나이 기준으로 복원됨', () => {
+  const items2045 = c.calculateLumpSumExpenses('2026-06-23', '2026-10-25', 2.5, {
+    'dorm-deposit': {
+      targetAge: 19,
+      familySupportManwon: 1000,
+      customDate: '2045-03-01',
+    },
+  });
+  const dorm2045 = items2045.find((i) => i.id === 'dorm-deposit');
+  assert.equal(dorm2045.startYear, 2045);
+  assert.equal(dorm2045.familySupportManwon, 1000);
+  assert.equal(dorm2045.familySupportFutureManwon, 1599);
+  assert.equal(dorm2045.familySupportFutureLabel, '1,599만원');
+  assert.equal(dorm2045.futureValueLines[0], '799만원 ~ 3,197만원');
+
+  const items2055 = c.calculateLumpSumExpenses('2026-06-23', '2026-10-25', 2.5, {
+    'dorm-deposit': {
+      targetAge: 19,
+      familySupportManwon: 1000,
+      customDate: '2055-03-01',
+    },
+  });
+  const dorm2055 = items2055.find((i) => i.id === 'dorm-deposit');
+  assert.equal(dorm2055.startYear, 2055);
+  assert.equal(dorm2055.familySupportManwon, 1000); // 현재 가치 지원액 그대로 보존
+  assert.equal(dorm2055.familySupportFutureManwon, 2046);
+  assert.equal(dorm2055.familySupportFutureLabel, '2,046만원');
+  assert.equal(dorm2055.futureValueLines[0], '1,023만원 ~ 4,093만원');
+  // 직접 지정한 날짜(만 28세)와 기존 targetAge(만 19세)가 충돌할 때 지정일만 표시하고 19세를 동시에 표시하지 않음
+  assert.ok(dorm2055.timingAgeLabel.includes('만 28세'));
+  assert.ok(!dorm2055.timingAgeLabel.includes('19'));
+  assert.equal(dorm2055.timingYearLabel, '예정일: 2055.03.01');
+
+  // 예정일을 지우면 기존 예상 나이(만 19세 -> 2045년) 기준 금액(1,599만원)으로 돌아감
+  const itemsCleared = c.calculateLumpSumExpenses('2026-06-23', '2026-10-25', 2.5, {
+    'dorm-deposit': {
+      targetAge: 19,
+      familySupportManwon: 1000,
+      customDate: undefined,
+    },
+  });
+  const dormCleared = itemsCleared.find((i) => i.id === 'dorm-deposit');
+  assert.equal(dormCleared.startYear, 2045);
+  assert.equal(dormCleared.familySupportManwon, 1000);
+  assert.equal(dormCleared.familySupportFutureManwon, 1599);
+  assert.equal(dormCleared.familySupportFutureLabel, '1,599만원');
+  assert.ok(dormCleared.timingAgeLabel.includes('만 19세경'));
+  assert.equal(dormCleared.timingYearLabel, '2045년 무렵');
+});
+
+test('검증 3·4: 다년도 항목(대학 등록금 4년)에 첫 납부 예정일을 지정하면 해당 연도부터 4개년 비용이 계산되며, 잘못된 날짜는 무시됨', () => {
+  const defaultUniv = c.calculateLumpSumExpenses('2026-06-23', '2026-10-25', 2.5)[0];
+  assert.equal(defaultUniv.startYear, 2045);
+  assert.equal(defaultUniv.endYear, 2048);
+  assert.equal(defaultUniv.familySupportFutureManwon, 4826);
+
+  // 첫 납부 예정일을 2047-03-02로 지정 -> 2047~2050년 4개년 물가 반영
+  const customUniv = c.calculateLumpSumExpenses('2026-06-23', '2026-10-25', 2.5, {
+    'univ-tuition': { customDate: '2047-03-02' },
+  })[0];
+  assert.equal(customUniv.startYear, 2047);
+  assert.equal(customUniv.endYear, 2050);
+  assert.equal(customUniv.customEndDateDot, '2050.03.02');
+  assert.ok(customUniv.familySupportFutureManwon > defaultUniv.familySupportFutureManwon);
+  assert.equal(customUniv.familySupportFutureManwon, 5070);
+  assert.ok(customUniv.timingYearLabel.includes('첫 납부: 2047.03.02 (2047~2050년)'));
+
+  // 잘못된 달력 날짜(2047-02-31) 또는 생년월일 이전 날짜(2025-03-01)는 계산에 사용하지 않고 기본 나이 기준 유지
+  const invalidDateUniv = c.calculateLumpSumExpenses('2026-06-23', '2026-10-25', 2.5, {
+    'univ-tuition': { customDate: '2047-02-31' },
+    'dorm-deposit': { customDate: '2025-03-01' },
+  });
+  assert.equal(invalidDateUniv[0].customDate, undefined);
+  assert.equal(invalidDateUniv[0].startYear, 2045);
+  assert.equal(invalidDateUniv[0].familySupportFutureManwon, 4826);
+  assert.equal(invalidDateUniv[1].customDate, undefined);
+  assert.equal(invalidDateUniv[1].startYear, 2045);
+});
+
+test('검증 5·6·7·8·9: 과거 미확인 입금액 월별 다른 금액 확정, 선택 일괄 적용, 0원과 빈칸 구분, 확정 후 월별 수정, 표 밖 과거 기록 보존', () => {
+  const checkedMap = {
+    'installment-2026-10': true,
+    'installment-2026-11': true,
+    'installment-2026-12': true,
+  };
+  let amountMap = {};
+
+  // 1) 월별 서로 다른 금액(10만원, 20만원) 입력 -> 합계 30만원, 12월은 미확인 유지
+  const step1 = c.applySingleInstallmentAmount(
+    checkedMap,
+    amountMap,
+    'installment-2026-10',
+    '100000'
+  );
+  assert.equal(step1.status, 'confirmed');
+  amountMap = step1.nextAmountMap;
+
+  const step2 = c.applySingleInstallmentAmount(
+    checkedMap,
+    amountMap,
+    'installment-2026-11',
+    '200000'
+  );
+  assert.equal(step2.status, 'confirmed');
+  amountMap = step2.nextAmountMap;
+
+  const p2026 = c.calculateGiftPeriods('2026-06-23', '2026-10-25', 500000)[0];
+  const rows2026 = c.generateInstallmentSchedule(p2026);
+  let analysis = c.analyzeAllInstallmentRecords(rows2026, checkedMap, amountMap);
+  assert.equal(analysis.totalConfirmedAmountWon, 300000);
+  assert.equal(analysis.totalConfirmedCount, 2);
+  assert.equal(analysis.totalUnverifiedCount, 1);
+  assert.equal(analysis.unverifiedItems[0].key, 'installment-2026-12');
+
+  // 2) 빈 입력('')은 미확인, 숫자 '0'은 0원 확정, 음수('-5000')나 문자('abc')는 저장 거부
+  const negTry = c.applySingleInstallmentAmount(
+    checkedMap,
+    amountMap,
+    'installment-2026-12',
+    '-5000'
+  );
+  assert.equal(negTry.status, 'invalid');
+  assert.equal(negTry.nextAmountMap['installment-2026-12'], undefined);
+
+  const emptyTry = c.applySingleInstallmentAmount(
+    checkedMap,
+    amountMap,
+    'installment-2026-12',
+    '   '
+  );
+  assert.equal(emptyTry.status, 'unverified');
+  assert.equal(emptyTry.nextAmountMap['installment-2026-12'], undefined);
+
+  const zeroConfirm = c.applySingleInstallmentAmount(
+    checkedMap,
+    amountMap,
+    'installment-2026-12',
+    '0'
+  );
+  assert.equal(zeroConfirm.status, 'confirmed');
+  assert.equal(zeroConfirm.amountWon, 0);
+  amountMap = zeroConfirm.nextAmountMap;
+
+  analysis = c.analyzeAllInstallmentRecords(rows2026, checkedMap, amountMap);
+  assert.equal(analysis.totalConfirmedCount, 3);
+  assert.equal(analysis.totalUnverifiedCount, 0);
+  assert.equal(analysis.totalConfirmedAmountWon, 300000);
+
+  // 3) 미확인 기록 중 일부만 선택해 일괄 적용 시 선택한 미확인 기록만 바뀌고 나머지와 이미 확정된 기록은 불변
+  const checkedMapBatch = {
+    'installment-2026-10': true, // 이미 100,000원 확정됨
+    'installment-2026-11': true, // 미확인 1 (선택함)
+    'installment-2026-12': true, // 미확인 2 (선택 안 함)
+  };
+  const batchRes = c.applyBatchInstallmentAmounts(
+    checkedMapBatch,
+    { 'installment-2026-10': 100000 },
+    ['installment-2026-10', 'installment-2026-11'], // 10월은 이미 확정되어 보호되고 11월만 적용되어야 함
+    '250000'
+  );
+  assert.equal(batchRes.status, 'applied');
+  assert.deepEqual(batchRes.appliedKeys, ['installment-2026-11']);
+  assert.equal(batchRes.nextAmountMap['installment-2026-10'], 100000); // 기존 확정액 보존
+  assert.equal(batchRes.nextAmountMap['installment-2026-11'], 250000); // 선택한 미확인만 적용
+  assert.equal(batchRes.nextAmountMap['installment-2026-12'], undefined); // 미선택 기록은 미확인 유지
+
+  // 4) 이미 확정한 금액을 월별로 수정하면 합계가 즉시 재계산됨
+  const editRes = c.applySingleInstallmentAmount(
+    checkedMap,
+    amountMap,
+    'installment-2026-10',
+    '150000'
+  );
+  assert.equal(editRes.status, 'confirmed');
+  amountMap = editRes.nextAmountMap;
+  analysis = c.analyzeAllInstallmentRecords(rows2026, checkedMap, amountMap);
+  assert.equal(analysis.totalConfirmedAmountWon, 350000); // 15만 + 20만 + 0원
+
+  // 5) 시작일을 2028-10-25로 바꿔 2026년 기록이 현재 표 밖에 놓여도 사라지지 않고 확인·수정 가능
+  const p2028 = c.calculateGiftPeriods('2026-06-23', '2028-10-25', 500000)[0];
+  const rows2028 = c.generateInstallmentSchedule(p2028);
+  const outAnalysis = c.analyzeAllInstallmentRecords(
+    rows2028,
+    checkedMap,
+    amountMap
+  );
+  assert.equal(outAnalysis.outOfScheduleItems.length, 3);
+  assert.equal(outAnalysis.outOfScheduleConfirmedCount, 3);
+  assert.equal(outAnalysis.outOfScheduleConfirmedAmountWon, 350000);
+  assert.equal(outAnalysis.totalConfirmedAmountWon, 350000);
+});

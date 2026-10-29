@@ -13,6 +13,8 @@ import {
   generateInstallmentSchedule,
   calculateLumpSumExpenses,
   generateAgeYearTable,
+  applySingleInstallmentAmount,
+  applyBatchInstallmentAmounts,
 } from '@/lib/calculator';
 import { Sheet1To3GiftOverview } from '@/components/sheets/Sheet1And2GiftSummary';
 import { Sheet4To6DelayAndChecklists } from '@/components/sheets/Sheet4And5DelayAndAllowance';
@@ -428,24 +430,52 @@ export default function ChildGiftPlannerPage() {
     }
   };
 
-  // 금액 없이 체크만 저장된 과거 항목에 대해 사용자가 입력한 실제 입금액을 일괄 확정
-  const handleConfirmUnverifiedAmounts = (amountWon: number) => {
-    setCheckedAmountMap((prev) => {
-      const next = { ...prev };
-      Object.keys(checkedMap).forEach((key) => {
-        if (
-          key.startsWith('installment-') &&
-          checkedMap[key] &&
-          typeof next[key] !== 'number'
-        ) {
-          next[key] = amountWon;
-        }
-      });
-      return next;
-    });
-    setNotice(
-      `금액 미확인 체크 항목을 월 ${amountWon.toLocaleString('ko-KR')}원으로 확정했습니다.`
+  // 개별 월(key)의 실제 입금액 확정·수정 또는 미확인(null/'') 전환
+  const handleSetInstallmentMonthAmount = (
+    key: string,
+    rawInput: string | number | null
+  ): boolean => {
+    const res = applySingleInstallmentAmount(
+      checkedMap,
+      checkedAmountMap,
+      key,
+      rawInput
     );
+    if (res.status === 'invalid') {
+      return false;
+    }
+    setCheckedAmountMap(res.nextAmountMap);
+    const match = /^installment-(\d{4})-(\d{1,2})$/.exec(key);
+    const ymLabel = match ? `${match[1]}년 ${match[2]}월` : key;
+    if (res.status === 'unverified') {
+      setNotice(`${ymLabel} 입금 기록을 '미확인' 상태로 변경했습니다.`);
+    } else if (typeof res.amountWon === 'number') {
+      setNotice(
+        `${ymLabel} 실제 입금액을 ${res.amountWon.toLocaleString('ko-KR')}원으로 저장했습니다.`
+      );
+    }
+    return true;
+  };
+
+  // 사용자가 명시적으로 선택한 미확인 기록(selectedKeys)에만 일괄 금액 적용
+  const handleBatchSetInstallmentAmounts = (
+    selectedKeys: string[],
+    rawInput: string | number
+  ): boolean => {
+    const res = applyBatchInstallmentAmounts(
+      checkedMap,
+      checkedAmountMap,
+      selectedKeys,
+      rawInput
+    );
+    if (res.status !== 'applied' || typeof res.amountWon !== 'number') {
+      return false;
+    }
+    setCheckedAmountMap(res.nextAmountMap);
+    setNotice(
+      `선택한 미확인 기록 ${res.appliedKeys.length}건을 월 ${res.amountWon.toLocaleString('ko-KR')}원으로 확정했습니다.`
+    );
+    return true;
   };
 
   const handleChangeMemo = (key: string, value: string) => {
@@ -1070,7 +1100,8 @@ export default function ChildGiftPlannerPage() {
           checkedMap={checkedMap}
           checkedAmountMap={checkedAmountMap}
           onToggleCheck={handleToggleCheck}
-          onConfirmUnverifiedAmounts={handleConfirmUnverifiedAmounts}
+          onSetInstallmentMonthAmount={handleSetInstallmentMonthAmount}
+          onBatchSetInstallmentAmounts={handleBatchSetInstallmentAmounts}
           memoMap={memoMap}
           onChangeMemo={handleChangeMemo}
         />

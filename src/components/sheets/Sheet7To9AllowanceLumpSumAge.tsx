@@ -455,44 +455,72 @@ export function Sheet7To9PocketLumpSumAge({
                     <div className="whitespace-pre-line font-semibold">
                       {item.timingAgeLabel}
                     </div>
-                    <div className="text-slate-600">
-                      {item.customDateDot
-                        ? `지정일: ${item.customDateDot}`
-                        : item.timingYearLabel}
-                    </div>
+                    <div className="text-slate-600">{item.timingYearLabel}</div>
                     <div className="no-print mt-1 flex flex-col items-center gap-1 text-[9.5px] text-slate-600">
-                      <div className="flex items-center justify-center gap-0.5">
-                        <span>만</span>
+                      {!item.customDate && (
+                        <div className="flex items-center justify-center gap-0.5">
+                          <span>만</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={45}
+                            value={item.targetAge}
+                            onChange={(e) =>
+                              onUpdateExpenseOverride(item.id, {
+                                targetAge: Math.max(
+                                  0,
+                                  Math.min(45, Number(e.target.value) || 0)
+                                ),
+                              })
+                            }
+                            aria-label={`${item.title.replace(/\n/g, ' ')} 예상 시작 만 나이`}
+                            className="w-10 px-1 py-0.5 text-center font-bold border border-slate-300 rounded bg-white"
+                          />
+                          <span>세경</span>
+                        </div>
+                      )}
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-[9px] font-semibold text-slate-500">
+                          {item.ageSpanYears > 0
+                            ? '첫 납부 예정일'
+                            : '예정일 직접 지정'}
+                        </span>
                         <input
-                          type="number"
-                          min={0}
-                          max={45}
-                          value={item.targetAge}
+                          type="date"
+                          min={birthDate}
+                          value={item.customDate || ''}
                           onChange={(e) =>
                             onUpdateExpenseOverride(item.id, {
-                              targetAge: Math.max(
-                                0,
-                                Math.min(45, Number(e.target.value) || 0)
-                              ),
+                              customDate: e.target.value || undefined,
                             })
                           }
-                          aria-label={`${item.title.replace(/\n/g, ' ')} 예상 시작 만 나이`}
-                          className="w-10 px-1 py-0.5 text-center font-bold border border-slate-300 rounded bg-white"
+                          title={
+                            item.ageSpanYears > 0
+                              ? '여러 해에 걸치는 항목은 첫 납부 예정일을 선택하세요 (비워두면 예상 나이 기준으로 계산)'
+                              : '정확한 예정일이 정해진 경우에만 선택하세요 (비워두면 예상 나이 기준으로 계산)'
+                          }
+                          aria-label={`${item.title.replace(/\n/g, ' ')} ${
+                            item.ageSpanYears > 0
+                              ? '첫 납부 예정일'
+                              : '직접 지정 예정일(선택)'
+                          }`}
+                          className="w-26 px-1 py-0.5 text-[9px] border border-slate-200 rounded bg-white text-slate-600"
                         />
-                        <span>세경</span>
+                        {item.customDate && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onUpdateExpenseOverride(item.id, {
+                                customDate: undefined,
+                              })
+                            }
+                            aria-label={`${item.title.replace(/\n/g, ' ')} 지정일 지우기`}
+                            className="text-[9px] font-semibold text-indigo-700 underline cursor-pointer"
+                          >
+                            지정일 지우기(나이 기준 복원)
+                          </button>
+                        )}
                       </div>
-                      <input
-                        type="date"
-                        value={item.customDate || ''}
-                        onChange={(e) =>
-                          onUpdateExpenseOverride(item.id, {
-                            customDate: e.target.value || undefined,
-                          })
-                        }
-                        title="정확한 예정일이 정해진 경우에만 선택하세요 (비워두면 연도 단위로만 추정)"
-                        aria-label={`${item.title.replace(/\n/g, ' ')} 직접 지정 예정일(선택)`}
-                        className="w-26 px-1 py-0.5 text-[9px] border border-slate-200 rounded bg-white text-slate-600"
-                      />
                     </div>
                   </td>
                   <td className="text-[10.5px] text-slate-700 leading-snug align-middle">

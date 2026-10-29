@@ -77,6 +77,7 @@ export interface LumpSumExpenseItem {
   endYear: number; // 예상 종료 연도 (예: 2048)
   customDate?: string; // 사용자가 직접 입력한 예정일 YYYY-MM-DD (없으면 undefined, 생일로 임의 생성하지 않음)
   customDateDot?: string; // 사용자가 직접 입력한 예정일 YYYY.MM.DD
+  customEndDateDot?: string; // 다년도 항목의 지정일 기준 마지막 연도 예정일 YYYY.MM.DD
   defaultTargetAge: number;
   targetAge: number;
   ageSpanYears: number; // 단년도면 0, 4개년이면 3 등
@@ -642,7 +643,7 @@ export function generateInstallmentSchedule(firstPeriod: GiftPeriod): MonthlyChe
 
 /**
  * 시트 6: 특정 연도의 실제 체크된 입금 횟수와 실제 입금액 합계를 계산합니다.
- * - 체크 시점에 금액이 저장된 기록(checkedAmountMap)만 확정 합계(actualAmountWon)에 포함합니다.
+ * - 체크 시점에 금액이 저장된 기록(checkedAmountMap, 0원 이상의 유한한 숫자)만 확정 합계(actualAmountWon)에 포함합니다.
  * - 이전 버전 등에서 금액 없이 체크만 저장된 기록은 현재 월 계획액으로 대체 계산하지 않고,
  *   '입금액 확인 필요(unverifiedCount)'로 분리하여 설정 변경 시 과거 입금액이 바뀌지 않도록 보장합니다.
  */
@@ -661,8 +662,8 @@ export function calculateActualInstallmentRowTotal(
   let checkedCount = 0;
   let confirmedCount = 0;
   let unverifiedCount = 0;
-  const unverifiedMonths: number[] = [];
   let actualAmountWon = 0;
+  const unverifiedList: number[] = [];
 
   activeMonths.forEach((isActive, idx) => {
     if (!isActive) return;
@@ -670,12 +671,16 @@ export function calculateActualInstallmentRowTotal(
     if (checkedMap[key]) {
       checkedCount += 1;
       const recordedAmount = checkedAmountMap?.[key];
-      if (typeof recordedAmount === 'number' && Number.isFinite(recordedAmount)) {
+      if (
+        typeof recordedAmount === 'number' &&
+        Number.isFinite(recordedAmount) &&
+        recordedAmount >= 0
+      ) {
         confirmedCount += 1;
-        actualAmountWon += recordedAmount;
+        actualAmountWon += Math.floor(recordedAmount);
       } else {
         unverifiedCount += 1;
-        unverifiedMonths.push(idx + 1);
+        unverifiedList.push(idx + 1);
       }
     }
   });
@@ -684,8 +689,258 @@ export function calculateActualInstallmentRowTotal(
     checkedCount,
     confirmedCount,
     unverifiedCount,
-    unverifiedMonths,
+    unverifiedMonths: unverifiedList,
     actualAmountWon,
+  };
+}
+
+export interface InstallmentRecordItem {
+  key: string; // 예: "installment-2026-10"
+  year: number;
+  month: number;
+  ymLabel: string; // 예: "2026년 10월"
+  isInCurrentSchedule: boolean; // 현재 1차 120회 표(installmentRows) 범위 내 여부
+  isConfirmed: boolean; // 0원 이상의 유효한 금액이 확정되었는지 여부
+  amountWon?: number; // 확정된 금액(원), 미확인 상태면 undefined
+}
+
+export interface InstallmentRecordsAnalysis {
+  allCheckedItems: InstallmentRecordItem[];
+  unverifiedItems: InstallmentRecordItem[];
+  confirmedItems: InstallmentRecordItem[];
+  outOfScheduleItems: InstallmentRecordItem[];
+  outOfScheduleConfirmedCount: number;
+  outOfScheduleUnverifiedCount: number;
+  outOfScheduleConfirmedAmountWon: number;
+  inScheduleCheckedCount: number;
+  inScheduleConfirmedCount: number;
+  inScheduleUnverifiedCount: number;
+  inScheduleConfirmedAmountWon: number;
+  totalCheckedCount: number;
+  totalConfirmedCount: number;
+  totalUnverifiedCount: number;
+  totalConfirmedAmountWon: number;
+}
+
+/**
+ * 시트 6: 전체 체크 기록(checkedMap)과 금액 기록(checkedAmountMap)을 전수 분석합니다.
+ * - 현재 1차 120회 표(installmentRows) 안에 있는 기록뿐만 아니라, 시작일 변경 등으로 현재 표 밖에 놓인 과거 체크 기록도 누락 없이 추출합니다.
+ * - 숫자 0은 명시적으로 입력된 '0원 확정'으로 인정하고, 값이 없거나 음수·NaN인 경우는 '미확인'으로 구분합니다.
+ */
+export function analyzeAllInstallmentRecords(
+  installmentRows: MonthlyCheckRow[],
+  checkedMap: Record<string, boolean>,
+  checkedAmountMap: Record<string, number>
+): InstallmentRecordsAnalysis {
+  const inScheduleKeySet = new Set<string>();
+  installmentRows.forEach((row) => {
+    row.activeMonths.forEach((isActive, idx) => {
+      if (isActive) {
+        inScheduleKeySet.add(`installment-${row.year}-${idx + 1}`);
+      }
+    });
+  });
+
+  const allCheckedItems: InstallmentRecordItem[] = [];
+
+  Object.keys(checkedMap || {}).forEach((key) => {
+    if (!checkedMap[key]) return;
+    const match = /^installment-(\d{4})-(\d{1,2})$/.exec(key);
+    if (!match) return;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (!Number.isFinite(year) || month < 1 || month > 12) return;
+
+    const rawAmount = checkedAmountMap?.[key];
+    const isConfirmed =
+      typeof rawAmount === 'number' &&
+      Number.isFinite(rawAmount) &&
+      rawAmount >= 0;
+    const amountWon = isConfirmed ? Math.floor(rawAmount) : undefined;
+
+    allCheckedItems.push({
+      key,
+      year,
+      month,
+      ymLabel: `${year}년 ${month}월`,
+      isInCurrentSchedule: inScheduleKeySet.has(key),
+      isConfirmed,
+      amountWon,
+    });
+  });
+
+  allCheckedItems.sort((a, b) =>
+    a.year !== b.year ? a.year - b.year : a.month - b.month
+  );
+
+  const unverifiedItems = allCheckedItems.filter((item) => !item.isConfirmed);
+  const confirmedItems = allCheckedItems.filter((item) => item.isConfirmed);
+  const outOfScheduleItems = allCheckedItems.filter(
+    (item) => !item.isInCurrentSchedule
+  );
+
+  let inScheduleCheckedCount = 0;
+  let inScheduleConfirmedCount = 0;
+  let inScheduleUnverifiedCount = 0;
+  let inScheduleConfirmedAmountWon = 0;
+
+  let outOfScheduleConfirmedCount = 0;
+  let outOfScheduleUnverifiedCount = 0;
+  let outOfScheduleConfirmedAmountWon = 0;
+
+  allCheckedItems.forEach((item) => {
+    if (item.isInCurrentSchedule) {
+      inScheduleCheckedCount += 1;
+      if (item.isConfirmed && typeof item.amountWon === 'number') {
+        inScheduleConfirmedCount += 1;
+        inScheduleConfirmedAmountWon += item.amountWon;
+      } else {
+        inScheduleUnverifiedCount += 1;
+      }
+    } else {
+      if (item.isConfirmed && typeof item.amountWon === 'number') {
+        outOfScheduleConfirmedCount += 1;
+        outOfScheduleConfirmedAmountWon += item.amountWon;
+      } else {
+        outOfScheduleUnverifiedCount += 1;
+      }
+    }
+  });
+
+  return {
+    allCheckedItems,
+    unverifiedItems,
+    confirmedItems,
+    outOfScheduleItems,
+    outOfScheduleConfirmedCount,
+    outOfScheduleUnverifiedCount,
+    outOfScheduleConfirmedAmountWon,
+    inScheduleCheckedCount,
+    inScheduleConfirmedCount,
+    inScheduleUnverifiedCount,
+    inScheduleConfirmedAmountWon,
+    totalCheckedCount: allCheckedItems.length,
+    totalConfirmedCount: confirmedItems.length,
+    totalUnverifiedCount: unverifiedItems.length,
+    totalConfirmedAmountWon:
+      inScheduleConfirmedAmountWon + outOfScheduleConfirmedAmountWon,
+  };
+}
+
+/**
+ * 입금액 문자열 입력을 파싱하여 '미확인(empty)', '유효한 금액(valid, 0원 포함)', '유효하지 않음(invalid, 음수·문자 등)'으로 구분합니다.
+ */
+export function parseInstallmentAmountInput(rawInput: string | number | null | undefined): {
+  status: 'empty' | 'valid' | 'invalid';
+  amountWon?: number;
+} {
+  if (rawInput === null || rawInput === undefined) {
+    return { status: 'empty' };
+  }
+  if (typeof rawInput === 'number') {
+    if (!Number.isFinite(rawInput) || rawInput < 0) {
+      return { status: 'invalid' };
+    }
+    return { status: 'valid', amountWon: Math.floor(rawInput) };
+  }
+  const trimmed = String(rawInput).trim();
+  if (trimmed === '') {
+    return { status: 'empty' };
+  }
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+    return { status: 'invalid' };
+  }
+  const num = Number(trimmed);
+  if (!Number.isFinite(num) || num < 0 || num > 10000000000) {
+    return { status: 'invalid' };
+  }
+  return { status: 'valid', amountWon: Math.floor(num) };
+}
+
+/**
+ * 단일 월(key)의 입금액을 확정·수정하거나 빈 값일 때 '미확인'으로 되돌립니다.
+ * - 음수나 유효하지 않은 입력은 저장하지 않고 기존 맵을 그대로 유지합니다.
+ */
+export function applySingleInstallmentAmount(
+  checkedMap: Record<string, boolean>,
+  checkedAmountMap: Record<string, number>,
+  key: string,
+  rawInput: string | number | null | undefined
+): {
+  nextAmountMap: Record<string, number>;
+  status: 'confirmed' | 'unverified' | 'invalid';
+  amountWon?: number;
+} {
+  if (!key.startsWith('installment-') || !checkedMap[key]) {
+    return { nextAmountMap: checkedAmountMap, status: 'invalid' };
+  }
+  const parsed = parseInstallmentAmountInput(rawInput);
+  if (parsed.status === 'invalid') {
+    return { nextAmountMap: checkedAmountMap, status: 'invalid' };
+  }
+  const nextAmountMap = { ...checkedAmountMap };
+  if (parsed.status === 'empty') {
+    delete nextAmountMap[key];
+    return { nextAmountMap, status: 'unverified' };
+  }
+  nextAmountMap[key] = parsed.amountWon!;
+  return {
+    nextAmountMap,
+    status: 'confirmed',
+    amountWon: parsed.amountWon!,
+  };
+}
+
+/**
+ * 사용자가 명시적으로 선택한 미확인 기록(selectedKeys)에만 일괄 금액을 적용합니다.
+ * - 이미 금액이 확정된 기록이나 선택하지 않은 미확인 기록은 절대 변경하지 않습니다.
+ */
+export function applyBatchInstallmentAmounts(
+  checkedMap: Record<string, boolean>,
+  checkedAmountMap: Record<string, number>,
+  selectedKeys: string[],
+  rawInput: string | number
+): {
+  nextAmountMap: Record<string, number>;
+  appliedKeys: string[];
+  status: 'applied' | 'invalid' | 'empty_selection';
+  amountWon?: number;
+} {
+  const parsed = parseInstallmentAmountInput(rawInput);
+  if (parsed.status !== 'valid' || typeof parsed.amountWon !== 'number') {
+    return {
+      nextAmountMap: checkedAmountMap,
+      appliedKeys: [],
+      status: 'invalid',
+    };
+  }
+
+  const targetKeys = selectedKeys.filter((key) => {
+    if (!key.startsWith('installment-') || !checkedMap[key]) return false;
+    const existing = checkedAmountMap?.[key];
+    const isAlreadyConfirmed =
+      typeof existing === 'number' && Number.isFinite(existing) && existing >= 0;
+    return !isAlreadyConfirmed;
+  });
+
+  if (targetKeys.length === 0) {
+    return {
+      nextAmountMap: checkedAmountMap,
+      appliedKeys: [],
+      status: 'empty_selection',
+    };
+  }
+
+  const nextAmountMap = { ...checkedAmountMap };
+  targetKeys.forEach((key) => {
+    nextAmountMap[key] = parsed.amountWon!;
+  });
+
+  return {
+    nextAmountMap,
+    appliedKeys: targetKeys,
+    status: 'applied',
+    amountWon: parsed.amountWon!,
   };
 }
 
@@ -705,10 +960,50 @@ export function formatManwonReadable(manwon: number): string {
 }
 
 /**
+ * 사용자가 직접 입력한 목돈 예정일(customDate)이 유효한 달력 날짜이고 아이 생년월일 이후인지 검증합니다.
+ */
+export function isValidCustomDate(
+  dateStr: unknown,
+  birthDateStr?: string
+): dateStr is string {
+  if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return false;
+  }
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (
+    !Number.isFinite(y) ||
+    !Number.isFinite(m) ||
+    !Number.isFinite(d) ||
+    y < 1900 ||
+    y > 2200 ||
+    m < 1 ||
+    m > 12
+  ) {
+    return false;
+  }
+  const maxDay = getLastDayOfMonth(y, m);
+  if (d < 1 || d > maxDay) {
+    return false;
+  }
+  if (
+    typeof birthDateStr === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(birthDateStr) &&
+    dateStr < birthDateStr
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * 시트 8: 자녀 목돈 필요 시기 체크리스트 (현재가 및 물가상승 반영 예상 금액)
  * - 기준연도 2026년 가격을 지급 연도별로 복리 상승 계산하며, 증여 시작일(startDateStr)과 독립입니다.
- * - 아이의 생일(월·일)로 목돈 필요 날짜를 임의 지정하지 않고, 기본값은 연도·시기 단위로 표시하며
- *   사용자가 필요한 경우에만 예정일(customDate)을 직접 입력할 수 있습니다.
+ * - 아이의 생일(월·일)로 목돈 필요 날짜를 임의 지정하지 않고, 기본값은 연도·시기 단위로 표시합니다.
+ * - 사용자가 유효한 예정일(customDate)을 직접 입력하면:
+ *   1) 해당 예정일의 연도를 비용 물가 반영 계산에 그대로 적용하고,
+ *   2) 대학 등록금 등 다년도 항목은 지정일을 '첫 납부 예정일(첫 지출 시점)'로 삼아 이후 각 연도의 비용을 계산하며,
+ *   3) 예상 시기 표시·구간 배치·물가 반영 금액이 모두 지정일 기준을 사용하고 충돌하는 기존 예상 나이를 동시에 표시하지 않습니다.
+ *   4) 날짜를 지우거나 잘못된 날짜이면 기존 예상 나이·연도 기준으로 돌아갑니다.
  */
 export function calculateLumpSumExpenses(
   birthDateStr: string,
@@ -720,15 +1015,18 @@ export function calculateLumpSumExpenses(
   void startDateStr; // 증여일은 비용의 기준일이 아닙니다.
   const r = inflationRate / 100;
 
-  // 기준연도 2026년 가격을 지급 연도까지 연 단위로 계산합니다.
-  const getMultiplierForAge = (targetAge: number): number =>
-    Math.pow(1 + r, Math.max(0, birth.year + targetAge - COST_BASE_YEAR));
+  // 기준연도 2026년 가격을 실제 지출 연도(targetYear)까지 연 단위로 복리 계산합니다.
+  const getMultiplierForYear = (targetYear: number): number =>
+    Math.pow(1 + r, Math.max(0, targetYear - COST_BASE_YEAR));
 
-  // 각 항목별 설정값(나이, 가족지원액, 포함여부, 직접 입력 날짜) 조회 헬퍼
+  // 각 항목별 설정값(나이, 가족지원액, 포함여부, 직접 입력 날짜, 유효 시작/종료연도 및 표시 문구) 조회 헬퍼
   const resolveConfig = (
     id: string,
     defaultAge: number,
-    defaultSupportManwon: number
+    ageSpanYears: number,
+    defaultSupportManwon: number,
+    defaultTimingPrefix: string,
+    defaultAgeSuffix: string
   ) => {
     const ov = overrides[id];
     const targetAge =
@@ -741,20 +1039,90 @@ export function calculateLumpSumExpenses(
         ? Math.max(0, Math.floor(ov.familySupportManwon))
         : defaultSupportManwon;
     const included = ov?.included !== undefined ? ov.included : true;
-    const customDate =
-      typeof ov?.customDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ov.customDate)
-        ? ov.customDate
-        : undefined;
+
+    const customDate = isValidCustomDate(ov?.customDate, birthDateStr)
+      ? ov.customDate
+      : undefined;
     const customDateDot = customDate
       ? customDate.replace(/-/g, '.')
       : undefined;
-    return { targetAge, familySupportManwon, included, customDate, customDateDot };
+
+    if (customDate && customDateDot) {
+      const parsedCustom = parseYMD(customDate);
+      const startYear = parsedCustom.year;
+      const endYear = startYear + ageSpanYears;
+      const endDay = Math.min(
+        parsedCustom.day,
+        getLastDayOfMonth(endYear, parsedCustom.month)
+      );
+      const customEndDateDot = formatDotYMD(
+        endYear,
+        parsedCustom.month,
+        endDay
+      );
+      const ageAtCustomStart = getManAge(birthDateStr, customDate);
+      const ageAtCustomEnd = getManAge(
+        birthDateStr,
+        customEndDateDot.replace(/\./g, '-')
+      );
+
+      const timingAgeLabel =
+        ageSpanYears > 0
+          ? `첫 납부 지정일 기준\n만 ${ageAtCustomStart}~${ageAtCustomEnd}세`
+          : `지정일 기준\n만 ${ageAtCustomStart}세`;
+      const timingYearLabel =
+        ageSpanYears > 0
+          ? `첫 납부: ${customDateDot} (${startYear}~${endYear}년)`
+          : `예정일: ${customDateDot}`;
+
+      return {
+        targetAge,
+        familySupportManwon,
+        included,
+        customDate,
+        customDateDot,
+        customEndDateDot,
+        startYear,
+        endYear,
+        timingAgeLabel,
+        timingYearLabel,
+      };
+    }
+
+    const startYear = birth.year + targetAge;
+    const endYear = startYear + ageSpanYears;
+    const timingAgeLabel =
+      ageSpanYears > 0
+        ? `${defaultTimingPrefix}\n만 ${targetAge}~${targetAge + ageSpanYears}${defaultAgeSuffix}`
+        : `${defaultTimingPrefix}\n만 ${targetAge}${defaultAgeSuffix}`;
+    const timingYearLabel =
+      ageSpanYears > 0 ? `${startYear}~${endYear}년` : `${startYear}년 무렵`;
+
+    return {
+      targetAge,
+      familySupportManwon,
+      included,
+      customDate: undefined,
+      customDateDot: undefined,
+      customEndDateDot: undefined,
+      startYear,
+      endYear,
+      timingAgeLabel,
+      timingYearLabel,
+    };
   };
 
-  // 1. 대학 등록금 (4년): 기본 만 19~22세 4개년 각각 물가 반영 후 합산
-  const univCfg = resolveConfig('univ-tuition', 19, 2908);
-  const univAges = [0, 1, 2, 3].map((offset) => univCfg.targetAge + offset);
-  const univMultipliers = univAges.map(getMultiplierForAge);
+  // 1. 대학 등록금 (4년): 기본 만 19~22세(또는 첫 납부 지정일 연도부터 4개년) 각각 물가 반영 후 합산
+  const univCfg = resolveConfig(
+    'univ-tuition',
+    19,
+    3,
+    2908,
+    '대학 재학 무렵',
+    '세'
+  );
+  const univYears = [0, 1, 2, 3].map((offset) => univCfg.startYear + offset);
+  const univMultipliers = univYears.map(getMultiplierForYear);
   const univAvgMultiplier =
     univMultipliers.reduce((a, b) => a + b, 0) / univMultipliers.length;
 
@@ -765,45 +1133,80 @@ export function calculateLumpSumExpenses(
     ? Math.round(univCfg.familySupportManwon * univAvgMultiplier)
     : 0;
 
-  // 2. 타지역 자취 보증금 (기본 만 19세 무렵)
-  const dormCfg = resolveConfig('dorm-deposit', 19, 1000);
-  const dormMult = getMultiplierForAge(dormCfg.targetAge);
+  // 2. 타지역 자취 보증금 (기본 만 19세 무렵 또는 지정일 연도)
+  const dormCfg = resolveConfig(
+    'dorm-deposit',
+    19,
+    0,
+    1000,
+    '대학 입학 무렵',
+    '세경'
+  );
+  const dormMult = getMultiplierForYear(dormCfg.startYear);
   const dormMinFuture = Math.round(500 * dormMult);
   const dormMaxFuture = Math.round(2000 * dormMult);
   const dormSupportFuture = dormCfg.included
     ? Math.round(dormCfg.familySupportManwon * dormMult)
     : 0;
 
-  // 3. 어학연수·교환학생 (기본 만 20~22세 무렵, 대표연도 startAge + 1)
-  const studyCfg = resolveConfig('study-abroad', 20, 1500);
-  const studyAbroadMult = getMultiplierForAge(studyCfg.targetAge + 1);
+  // 3. 어학연수·교환학생 (기본 만 20~22세 무렵, 첫 지출 연도 기준 대표연도 startYear + 1)
+  const studyCfg = resolveConfig(
+    'study-abroad',
+    20,
+    2,
+    1500,
+    '대학 재학 중',
+    '세경'
+  );
+  const studyAbroadMult = getMultiplierForYear(studyCfg.startYear + 1);
   const studyMinFuture = Math.round(1000 * studyAbroadMult);
   const studyMaxFuture = Math.round(3000 * studyAbroadMult);
   const studySupportFuture = studyCfg.included
     ? Math.round(studyCfg.familySupportManwon * studyAbroadMult)
     : 0;
 
-  // 4. 취업 준비·자격증 (기본 만 22~24세 무렵, 대표연도 startAge + 1)
-  const jobCfg = resolveConfig('job-prep', 22, 300);
-  const jobPrepMult = getMultiplierForAge(jobCfg.targetAge + 1);
+  // 4. 취업 준비·자격증 (기본 만 22~24세 무렵, 첫 지출 연도 기준 대표연도 startYear + 1)
+  const jobCfg = resolveConfig(
+    'job-prep',
+    22,
+    2,
+    300,
+    '졸업 전후 무렵',
+    '세경'
+  );
+  const jobPrepMult = getMultiplierForYear(jobCfg.startYear + 1);
   const jobMinFuture = Math.round(100 * jobPrepMult);
   const jobMaxFuture = Math.round(500 * jobPrepMult);
   const jobSupportFuture = jobCfg.included
     ? Math.round(jobCfg.familySupportManwon * jobPrepMult)
     : 0;
 
-  // 5. 결혼 준비 (기본 만 32세 무렵, 선택 가정)
-  const weddingCfg = resolveConfig('wedding-prep', 32, 6298);
-  const weddingMult = getMultiplierForAge(weddingCfg.targetAge);
+  // 5. 결혼 준비 (기본 만 32세 무렵 또는 지정일 연도)
+  const weddingCfg = resolveConfig(
+    'wedding-prep',
+    32,
+    0,
+    6298,
+    '선택 가정',
+    '세 무렵'
+  );
+  const weddingMult = getMultiplierForYear(weddingCfg.startYear);
   const weddingFuture = Math.round(6298 * weddingMult);
   const weddingSupportFuture = weddingCfg.included
     ? Math.round(weddingCfg.familySupportManwon * weddingMult)
     : 0;
 
-  // 6. 신혼집 보증금·주택자금 (기본 결혼 나이와 연동 또는 개별 설정, 선택 가정)
+  // 6. 신혼집 보증금·주택자금 (기본 결혼 나이와 연동 또는 개별 설정/지정일 연도)
   const houseDefaultAge = overrides['wedding-prep']?.targetAge ?? 32;
-  const houseCfg = resolveConfig('newlywed-house', houseDefaultAge, 20000);
-  const houseMult = getMultiplierForAge(houseCfg.targetAge);
+  const houseCfg = resolveConfig(
+    'newlywed-house',
+    houseDefaultAge,
+    0,
+    20000,
+    '선택 가정',
+    '세 무렵'
+  );
+  const houseMult = getMultiplierForYear(houseCfg.startYear);
   const houseMinFuture = Math.round(20000 * houseMult);
   const houseMaxFuture = Math.round(30000 * houseMult);
   const houseSupportFuture = houseCfg.included
@@ -816,12 +1219,13 @@ export function calculateLumpSumExpenses(
       title: '대학 등록금 (4년)',
       requiredOrOptional: '선택',
       sourceType: '공식통계(교육부 2026)',
-      timingAgeLabel: `대학 재학 무렵\n만 ${univCfg.targetAge}~${univCfg.targetAge + 3}세`,
-      timingYearLabel: `${birth.year + univCfg.targetAge}~${birth.year + univCfg.targetAge + 3}년`,
-      startYear: birth.year + univCfg.targetAge,
-      endYear: birth.year + univCfg.targetAge + 3,
+      timingAgeLabel: univCfg.timingAgeLabel,
+      timingYearLabel: univCfg.timingYearLabel,
+      startYear: univCfg.startYear,
+      endYear: univCfg.endYear,
       customDate: univCfg.customDate,
       customDateDot: univCfg.customDateDot,
+      customEndDateDot: univCfg.customEndDateDot,
       defaultTargetAge: 19,
       targetAge: univCfg.targetAge,
       ageSpanYears: 3,
@@ -845,12 +1249,13 @@ export function calculateLumpSumExpenses(
       title: '타지역 자취 보증금',
       requiredOrOptional: '선택',
       sourceType: '예산예시(가정값)',
-      timingAgeLabel: `대학 입학 무렵\n만 ${dormCfg.targetAge}세경`,
-      timingYearLabel: `${birth.year + dormCfg.targetAge}년 무렵`,
-      startYear: birth.year + dormCfg.targetAge,
-      endYear: birth.year + dormCfg.targetAge,
+      timingAgeLabel: dormCfg.timingAgeLabel,
+      timingYearLabel: dormCfg.timingYearLabel,
+      startYear: dormCfg.startYear,
+      endYear: dormCfg.endYear,
       customDate: dormCfg.customDate,
       customDateDot: dormCfg.customDateDot,
+      customEndDateDot: dormCfg.customEndDateDot,
       defaultTargetAge: 19,
       targetAge: dormCfg.targetAge,
       ageSpanYears: 0,
@@ -872,12 +1277,13 @@ export function calculateLumpSumExpenses(
       title: '어학연수·교환학생',
       requiredOrOptional: '선택',
       sourceType: '예산예시(가정값)',
-      timingAgeLabel: `대학 재학 중\n만 ${studyCfg.targetAge}~${studyCfg.targetAge + 2}세경`,
-      timingYearLabel: `${birth.year + studyCfg.targetAge}~${birth.year + studyCfg.targetAge + 2}년`,
-      startYear: birth.year + studyCfg.targetAge,
-      endYear: birth.year + studyCfg.targetAge + 2,
+      timingAgeLabel: studyCfg.timingAgeLabel,
+      timingYearLabel: studyCfg.timingYearLabel,
+      startYear: studyCfg.startYear,
+      endYear: studyCfg.endYear,
       customDate: studyCfg.customDate,
       customDateDot: studyCfg.customDateDot,
+      customEndDateDot: studyCfg.customEndDateDot,
       defaultTargetAge: 20,
       targetAge: studyCfg.targetAge,
       ageSpanYears: 2,
@@ -899,12 +1305,13 @@ export function calculateLumpSumExpenses(
       title: '취업 준비·자격증',
       requiredOrOptional: '선택',
       sourceType: '예산예시(가정값)',
-      timingAgeLabel: `졸업 전후 무렵\n만 ${jobCfg.targetAge}~${jobCfg.targetAge + 2}세경`,
-      timingYearLabel: `${birth.year + jobCfg.targetAge}~${birth.year + jobCfg.targetAge + 2}년`,
-      startYear: birth.year + jobCfg.targetAge,
-      endYear: birth.year + jobCfg.targetAge + 2,
+      timingAgeLabel: jobCfg.timingAgeLabel,
+      timingYearLabel: jobCfg.timingYearLabel,
+      startYear: jobCfg.startYear,
+      endYear: jobCfg.endYear,
       customDate: jobCfg.customDate,
       customDateDot: jobCfg.customDateDot,
+      customEndDateDot: jobCfg.customEndDateDot,
       defaultTargetAge: 22,
       targetAge: jobCfg.targetAge,
       ageSpanYears: 2,
@@ -926,12 +1333,13 @@ export function calculateLumpSumExpenses(
       title: '결혼 준비',
       requiredOrOptional: '선택',
       sourceType: '예산예시(가정값)',
-      timingAgeLabel: `선택 가정\n만 ${weddingCfg.targetAge}세 무렵`,
-      timingYearLabel: `${birth.year + weddingCfg.targetAge}년 무렵`,
-      startYear: birth.year + weddingCfg.targetAge,
-      endYear: birth.year + weddingCfg.targetAge,
+      timingAgeLabel: weddingCfg.timingAgeLabel,
+      timingYearLabel: weddingCfg.timingYearLabel,
+      startYear: weddingCfg.startYear,
+      endYear: weddingCfg.endYear,
       customDate: weddingCfg.customDate,
       customDateDot: weddingCfg.customDateDot,
+      customEndDateDot: weddingCfg.customEndDateDot,
       defaultTargetAge: 32,
       targetAge: weddingCfg.targetAge,
       ageSpanYears: 0,
@@ -951,12 +1359,13 @@ export function calculateLumpSumExpenses(
       title: '신혼집 보증금·\n주택자금',
       requiredOrOptional: '선택',
       sourceType: '예산예시(가정값)',
-      timingAgeLabel: `선택 가정\n만 ${houseCfg.targetAge}세 무렵`,
-      timingYearLabel: `${birth.year + houseCfg.targetAge}년 무렵`,
-      startYear: birth.year + houseCfg.targetAge,
-      endYear: birth.year + houseCfg.targetAge,
+      timingAgeLabel: houseCfg.timingAgeLabel,
+      timingYearLabel: houseCfg.timingYearLabel,
+      startYear: houseCfg.startYear,
+      endYear: houseCfg.endYear,
       customDate: houseCfg.customDate,
       customDateDot: houseCfg.customDateDot,
+      customEndDateDot: houseCfg.customEndDateDot,
       defaultTargetAge: 32,
       targetAge: houseCfg.targetAge,
       ageSpanYears: 0,
@@ -998,29 +1407,36 @@ export function matchLumpSumItemsToPeriod(
 
     // 1. 사용자가 직접 예정일(customDateDot)을 지정한 경우: 실제 날짜 기준 비교
     if (item.customDateDot) {
-      const customYear = parseYMD(item.customDateDot).year;
+      const endDateDot = item.customEndDateDot || item.customDateDot;
       const isDateInside =
-        item.customDateDot >= period.startDate &&
-        item.customDateDot <= period.endDate;
+        item.customDateDot <= period.endDate &&
+        endDateDot >= period.startDate;
       const isYearOverlap =
-        customYear >= period.startYear && customYear <= period.endYear;
+        item.startYear <= period.endYear && item.endYear >= period.startYear;
 
       if (isDateInside) {
+        const label =
+          item.ageSpanYears > 0
+            ? `${cleanTitle} (첫 납부 ${item.customDateDot} · ${item.startYear}~${item.endYear}년)`
+            : `${cleanTitle} (지정일 ${item.customDateDot})`;
         matchedItems.push({
           id: item.id,
           title: cleanTitle,
           isBoundaryYearEstimate: false,
-          label: `${cleanTitle} (지정일 ${item.customDateDot})`,
+          label,
         });
       } else if (isYearOverlap) {
         const reason =
-          item.customDateDot < period.startDate
-            ? `${customYear}년이지만 ${period.label} 시작일(${period.startDate}) 이전`
-            : `${customYear}년이지만 ${period.label} 종료일(${period.endDate}) 이후`;
+          endDateDot < period.startDate
+            ? `${item.endYear}년이지만 ${period.label} 시작일(${period.startDate}) 이전`
+            : `${item.startYear}년이지만 ${period.label} 종료일(${period.endDate}) 이후`;
         yearOnlyMismatchItems.push({
           id: item.id,
           title: cleanTitle,
-          itemDateRange: item.customDateDot,
+          itemDateRange:
+            item.ageSpanYears > 0
+              ? `${item.customDateDot}~${endDateDot}`
+              : item.customDateDot,
           reason,
         });
       }

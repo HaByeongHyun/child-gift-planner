@@ -6,6 +6,8 @@ import {
   DelaySimulationRow,
   MonthlyCheckRow,
   calculateActualInstallmentRowTotal,
+  analyzeAllInstallmentRecords,
+  parseInstallmentAmountInput,
 } from '@/lib/calculator';
 import { SquareCheckbox } from '@/components/SquareCheckbox';
 
@@ -24,7 +26,14 @@ interface Sheet4To6Props {
   checkedMap: Record<string, boolean>;
   checkedAmountMap: Record<string, number>;
   onToggleCheck: (id: string) => void;
-  onConfirmUnverifiedAmounts: (amountWon: number) => void;
+  onSetInstallmentMonthAmount: (
+    key: string,
+    rawInput: string | number | null
+  ) => boolean;
+  onBatchSetInstallmentAmounts: (
+    selectedKeys: string[],
+    rawInput: string | number
+  ) => boolean;
   memoMap: Record<string, string>;
   onChangeMemo: (key: string, value: string) => void;
 }
@@ -38,11 +47,23 @@ export function Sheet4To6DelayAndChecklists({
   checkedMap,
   checkedAmountMap,
   onToggleCheck,
-  onConfirmUnverifiedAmounts,
+  onSetInstallmentMonthAmount,
+  onBatchSetInstallmentAmounts,
   memoMap,
   onChangeMemo,
 }: Sheet4To6Props) {
-  const [manualPastAmountInput, setManualPastAmountInput] = useState<string>('');
+  // 미확인 기록 월별 입력 상태 (기본 빈 문자열 = '미확인')
+  const [unverifiedInputs, setUnverifiedInputs] = useState<Record<string, string>>({});
+  // 일괄 적용을 위해 사용자가 직접 선택한 미확인 키 목록 (기본 전체 미선택)
+  const [selectedBatchKeys, setSelectedBatchKeys] = useState<Record<string, boolean>>({});
+  // 선택 항목 일괄 적용 금액 입력란
+  const [batchAmountInput, setBatchAmountInput] = useState<string>('');
+  // 이미 확정한 금액을 월별로 수정할 때 사용하는 입력 상태
+  const [confirmedEditInputs, setConfirmedEditInputs] = useState<Record<string, string>>({});
+  // 확정 금액 월별 수정 패널 펼침 상태
+  const [isConfirmedPanelOpen, setIsConfirmedPanelOpen] = useState<boolean>(true);
+  // 입력 오류 안내 문구 (음수 또는 유효하지 않은 금액 입력 시)
+  const [amountInputError, setAmountInputError] = useState<string>('');
 
   // 시트 5: 실제 체크된 아동수당 수령 횟수 집계
   const checkedAllowanceCount = allowanceInfo.rows.reduce((acc, row) => {
@@ -53,28 +74,22 @@ export function Sheet4To6DelayAndChecklists({
     return acc + rowChecked;
   }, 0);
 
-  // 시트 6: 전체 예정 합계 및 실제 체크 입금 합계 집계 (미확인 금액 건수 분리)
+  // 시트 6: 전체 예정 합계 및 전체 실제 체크 입금 기록 분석 (표 안 + 현재 표 밖 과거 기록 모두 포함)
   const totalPlannedWon = installmentRows.reduce(
     (sum, r) => sum + (r.annualAmount || 0),
     0
   );
-  const totalActualInfo = installmentRows.reduce(
-    (acc, row) => {
-      const info = calculateActualInstallmentRowTotal(
-        row.year,
-        row.activeMonths,
-        checkedMap,
-        checkedAmountMap
-      );
-      return {
-        checkedCount: acc.checkedCount + info.checkedCount,
-        confirmedCount: acc.confirmedCount + info.confirmedCount,
-        unverifiedCount: acc.unverifiedCount + info.unverifiedCount,
-        actualAmountWon: acc.actualAmountWon + info.actualAmountWon,
-      };
-    },
-    { checkedCount: 0, confirmedCount: 0, unverifiedCount: 0, actualAmountWon: 0 }
+  const installmentAnalysis = analyzeAllInstallmentRecords(
+    installmentRows,
+    checkedMap,
+    checkedAmountMap
   );
+
+  // 현재 미확인 목록 중 사용자가 체크박스로 직접 선택한 항목만 필터링
+  const selectedUnverifiedItems = installmentAnalysis.unverifiedItems.filter(
+    (item) => !!selectedBatchKeys[item.key]
+  );
+  const parsedBatchPreview = parseInstallmentAmountInput(batchAmountInput);
 
   const cutoffAge35Label = delaySimulations[0]?.cutoffDateAtAge35 || '만 35세 생일';
 
@@ -443,53 +458,331 @@ export function Sheet4To6DelayAndChecklists({
             (현재 월 계획액 {firstPeriod.monthlyPlanned.toLocaleString('ko-KR')}원 기준)
           </div>
           <div className="font-bold text-emerald-800">
-            확정 입금 합계: {totalActualInfo.actualAmountWon.toLocaleString('ko-KR')}원 (확정 {totalActualInfo.confirmedCount}회 / 전체 체크 {totalActualInfo.checkedCount}회)
-            {totalActualInfo.unverifiedCount > 0 && (
+            확정 입금 합계: {installmentAnalysis.totalConfirmedAmountWon.toLocaleString('ko-KR')}원 (확정 {installmentAnalysis.totalConfirmedCount}회 / 전체 체크 {installmentAnalysis.totalCheckedCount}회)
+            {installmentAnalysis.outOfScheduleItems.length > 0 && (
+              <span className="ml-1.5 text-indigo-800 font-bold">
+                · 현재 표 밖 과거 기록 {installmentAnalysis.outOfScheduleItems.length}건(확정 {installmentAnalysis.outOfScheduleConfirmedAmountWon.toLocaleString('ko-KR')}원) 포함
+              </span>
+            )}
+            {installmentAnalysis.totalUnverifiedCount > 0 && (
               <span className="ml-1.5 text-amber-800 font-extrabold">
-                · 입금액 확인 필요 {totalActualInfo.unverifiedCount}건
+                · 입금액 확인 필요 {installmentAnalysis.totalUnverifiedCount}건
               </span>
             )}
           </div>
         </div>
 
-        {totalActualInfo.unverifiedCount > 0 && (
-          <div className="no-print flex flex-wrap items-center justify-between gap-2 bg-amber-50 border border-amber-300 rounded px-2.5 py-2 mb-2 text-[11px] text-amber-950">
-            <span>
-              ⚠️ 이전 기록에서 금액 없이 체크만 저장된 항목이{' '}
-              <strong className="font-bold">
-                {totalActualInfo.unverifiedCount}건
-              </strong>{' '}
-              있습니다. 현재 설정값으로 자동 계산하지 않으므로 당시 실제 월 입금액을 직접 입력해 확정해 주세요.
-            </span>
-            <div className="flex items-center gap-1.5">
-              <input
-                type="number"
-                min={0}
-                step={1000}
-                value={manualPastAmountInput}
-                onChange={(e) => setManualPastAmountInput(e.target.value)}
-                placeholder="당시 월 입금액(원)"
-                aria-label="미확인 과거 체크 항목의 실제 월 입금액(원)"
-                className="w-32 px-2 py-1 text-xs font-bold border border-amber-400 rounded bg-white"
-              />
+        {amountInputError && (
+          <div
+            role="alert"
+            className="no-print mb-2 px-2.5 py-1.5 rounded bg-rose-50 border border-rose-300 text-[11px] font-bold text-rose-800"
+          >
+            {amountInputError}
+          </div>
+        )}
+
+        {installmentAnalysis.unverifiedItems.length > 0 && (
+          <div className="no-print bg-amber-50 border border-amber-300 rounded px-3 py-2.5 mb-2.5 text-[11px] text-amber-950 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-1">
+              <strong className="font-extrabold text-amber-950">
+                ⚠️ 입금액을 확인해 주세요 (미확인 기록{' '}
+                {installmentAnalysis.unverifiedItems.length}건)
+              </strong>
+              <span className="text-[10.5px] text-amber-900">
+                금액을 입력하지 않은 기록은 합계에 포함되지 않아요 · 빈칸은 ‘미확인’, 숫자 0은 ‘0원’으로 확정됩니다.
+              </span>
+            </div>
+
+            {/* 미확인 기록 월별 개별 입력 목록 */}
+            <div className="divide-y divide-amber-200 border border-amber-300 rounded bg-white">
+              {installmentAnalysis.unverifiedItems.map((item) => {
+                const rawVal = unverifiedInputs[item.key] ?? '';
+                const isSelected = !!selectedBatchKeys[item.key];
+                return (
+                  <div
+                    key={item.key}
+                    className="flex flex-wrap items-center justify-between gap-2 px-2.5 py-1.5"
+                  >
+                    <label className="inline-flex items-center gap-1.5 font-bold text-slate-900 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) =>
+                          setSelectedBatchKeys((prev) => ({
+                            ...prev,
+                            [item.key]: e.target.checked,
+                          }))
+                        }
+                        aria-label={`${item.ymLabel} 선택`}
+                        className="rounded border-slate-400"
+                      />
+                      <span>{item.ymLabel} 실제 입금액</span>
+                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9.5px] font-extrabold">
+                        미확인
+                      </span>
+                      {!item.isInCurrentSchedule && (
+                        <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-900 text-[9.5px] font-bold">
+                          현재 표 밖 과거 기록
+                        </span>
+                      )}
+                    </label>
+
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={rawVal}
+                        onChange={(e) => {
+                          setAmountInputError('');
+                          setUnverifiedInputs((prev) => ({
+                            ...prev,
+                            [item.key]: e.target.value,
+                          }));
+                        }}
+                        placeholder="미확인 (예: 200000 또는 0)"
+                        aria-label={`${item.ymLabel} 실제 입금액`}
+                        className="w-40 px-2 py-1 text-xs font-bold border border-amber-400 rounded bg-white text-slate-900"
+                      />
+                      <span className="text-[10px] text-slate-600">원</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const parsed = parseInstallmentAmountInput(rawVal);
+                          if (parsed.status === 'empty') {
+                            setAmountInputError(
+                              `${item.ymLabel}: 빈 입력은 '미확인'으로 유지되어 합계에 포함되지 않습니다. 0원으로 확정하려면 숫자 0을 입력해 주세요.`
+                            );
+                            return;
+                          }
+                          if (parsed.status === 'invalid') {
+                            setAmountInputError(
+                              `${item.ymLabel}: 음수나 유효하지 않은 금액은 저장할 수 없습니다. 0 이상의 숫자를 입력해 주세요.`
+                            );
+                            return;
+                          }
+                          setAmountInputError('');
+                          onSetInstallmentMonthAmount(
+                            item.key,
+                            parsed.amountWon!
+                          );
+                          setUnverifiedInputs((prev) => {
+                            const next = { ...prev };
+                            delete next[item.key];
+                            return next;
+                          });
+                          setSelectedBatchKeys((prev) => {
+                            const next = { ...prev };
+                            delete next[item.key];
+                            return next;
+                          });
+                        }}
+                        aria-label={`${item.ymLabel} 실제 입금액 저장`}
+                        className="px-2.5 py-1 rounded bg-amber-800 hover:bg-amber-900 text-white font-bold cursor-pointer"
+                      >
+                        저장
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 선택한 미확인 기록에만 일괄 적용 (기본 전체 미선택) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-amber-200/80">
+              <div className="text-[10.5px] text-amber-950">
+                {selectedUnverifiedItems.length > 0 ? (
+                  <span>
+                    <strong className="font-bold">선택한 적용 대상:</strong>{' '}
+                    {selectedUnverifiedItems.map((i) => i.ymLabel).join(', ')} (총{' '}
+                    <strong className="font-bold">
+                      {selectedUnverifiedItems.length}건
+                    </strong>
+                    {parsedBatchPreview.status === 'valid' &&
+                      typeof parsedBatchPreview.amountWon === 'number' && (
+                        <>
+                          {' '}
+                          · 월{' '}
+                          <strong className="font-bold">
+                            {parsedBatchPreview.amountWon.toLocaleString('ko-KR')}원
+                          </strong>
+                        </>
+                      )}
+                    )
+                  </span>
+                ) : (
+                  <span className="text-amber-900">
+                    같은 금액을 여러 달에 넣으려면 위 목록에서 적용할 연월을 직접 선택하세요(기본 미선택 · 이미 확정한 금액과 선택하지 않은 기록은 변경되지 않습니다).
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={batchAmountInput}
+                  onChange={(e) => {
+                    setAmountInputError('');
+                    setBatchAmountInput(e.target.value);
+                  }}
+                  placeholder="선택 건 적용 금액(원)"
+                  aria-label="선택한 미확인 기록에 적용할 월 입금액(원)"
+                  className="w-36 px-2 py-1 text-xs font-bold border border-amber-400 rounded bg-white text-slate-900"
+                />
+                <button
+                  type="button"
+                  disabled={selectedUnverifiedItems.length === 0}
+                  onClick={() => {
+                    if (selectedUnverifiedItems.length === 0) return;
+                    const parsed = parseInstallmentAmountInput(batchAmountInput);
+                    if (
+                      parsed.status !== 'valid' ||
+                      typeof parsed.amountWon !== 'number'
+                    ) {
+                      setAmountInputError(
+                        '일괄 적용할 금액에 0 이상의 유효한 숫자를 입력해 주세요(음수 및 빈칸은 적용할 수 없습니다).'
+                      );
+                      return;
+                    }
+                    setAmountInputError('');
+                    const targetKeys = selectedUnverifiedItems.map(
+                      (i) => i.key
+                    );
+                    const ok = onBatchSetInstallmentAmounts(
+                      targetKeys,
+                      parsed.amountWon
+                    );
+                    if (ok) {
+                      setBatchAmountInput('');
+                      setSelectedBatchKeys({});
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold cursor-pointer disabled:cursor-not-allowed"
+                >
+                  선택한 {selectedUnverifiedItems.length}건에 적용
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 확정한 입금액 월별 확인·수정 (표 밖 과거 기록 포함) */}
+        {installmentAnalysis.confirmedItems.length > 0 && (
+          <div className="no-print bg-emerald-50/60 border border-emerald-300 rounded px-3 py-2 mb-2.5 text-[11px] text-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <strong className="font-bold text-emerald-950">
+                  ✓ 확정한 입금액 월별 내역 ({installmentAnalysis.confirmedItems.length}건)
+                </strong>
+                {installmentAnalysis.outOfScheduleConfirmedCount > 0 && (
+                  <span className="ml-1.5 text-indigo-800 font-semibold">
+                    · 시작일 변경으로 현재 표 밖에 있는 과거 확정 기록{' '}
+                    {installmentAnalysis.outOfScheduleConfirmedCount}건 포함
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
-                onClick={() => {
-                  const parsed = Number(manualPastAmountInput);
-                  if (
-                    manualPastAmountInput.trim() !== '' &&
-                    Number.isFinite(parsed) &&
-                    parsed >= 0
-                  ) {
-                    onConfirmUnverifiedAmounts(Math.floor(parsed));
-                    setManualPastAmountInput('');
-                  }
-                }}
-                className="px-2.5 py-1 rounded bg-amber-800 hover:bg-amber-900 text-white font-bold cursor-pointer"
+                onClick={() => setIsConfirmedPanelOpen((prev) => !prev)}
+                className="text-[10.5px] font-bold text-emerald-900 underline cursor-pointer"
               >
-                미확인 건 금액 확정
+                {isConfirmedPanelOpen ? '월별 금액 수정 접기' : '월별 금액 확인·수정 열기'}
               </button>
             </div>
+
+            {isConfirmedPanelOpen && (
+              <div className="mt-2 divide-y divide-emerald-200/80 border border-emerald-200 rounded bg-white">
+                {installmentAnalysis.confirmedItems.map((item) => {
+                  const currentEditVal =
+                    confirmedEditInputs[item.key] !== undefined
+                      ? confirmedEditInputs[item.key]
+                      : String(item.amountWon ?? 0);
+                  return (
+                    <div
+                      key={item.key}
+                      className="flex flex-wrap items-center justify-between gap-2 px-2.5 py-1.5"
+                    >
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-bold text-slate-900">
+                          {item.ymLabel}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 text-[9.5px] font-extrabold">
+                          {(item.amountWon ?? 0).toLocaleString('ko-KR')}원 확정
+                        </span>
+                        {!item.isInCurrentSchedule && (
+                          <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-900 text-[9.5px] font-bold">
+                            현재 표 밖 과거 기록
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={currentEditVal}
+                          onChange={(e) => {
+                            setAmountInputError('');
+                            setConfirmedEditInputs((prev) => ({
+                              ...prev,
+                              [item.key]: e.target.value,
+                            }));
+                          }}
+                          aria-label={`${item.ymLabel} 확정 입금액 수정`}
+                          className="w-32 px-2 py-0.5 text-xs font-bold border border-slate-300 rounded bg-white text-slate-900"
+                        />
+                        <span className="text-[10px] text-slate-600">원</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const parsed =
+                              parseInstallmentAmountInput(currentEditVal);
+                            if (parsed.status === 'invalid') {
+                              setAmountInputError(
+                                `${item.ymLabel}: 음수나 유효하지 않은 금액으로 수정할 수 없습니다.`
+                              );
+                              return;
+                            }
+                            setAmountInputError('');
+                            if (parsed.status === 'empty') {
+                              onSetInstallmentMonthAmount(item.key, null);
+                            } else {
+                              onSetInstallmentMonthAmount(
+                                item.key,
+                                parsed.amountWon!
+                              );
+                            }
+                            setConfirmedEditInputs((prev) => {
+                              const next = { ...prev };
+                              delete next[item.key];
+                              return next;
+                            });
+                          }}
+                          aria-label={`${item.ymLabel} 확정 입금액 수정 저장`}
+                          className="px-2 py-0.5 rounded bg-emerald-800 hover:bg-emerald-900 text-white text-[10.5px] font-bold cursor-pointer"
+                        >
+                          금액 수정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAmountInputError('');
+                            onSetInstallmentMonthAmount(item.key, null);
+                            setConfirmedEditInputs((prev) => {
+                              const next = { ...prev };
+                              delete next[item.key];
+                              return next;
+                            });
+                          }}
+                          aria-label={`${item.ymLabel} 미확인으로 전환`}
+                          className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold cursor-pointer"
+                        >
+                          미확인 전환
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
