@@ -1,26 +1,91 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #f1f5f9;
+  --foreground: #0f172a;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* A4 용지 시트 스타일 (화면에서는 그림자 있는 A4 카드, 인쇄 시 페이지 분할) */
+.a4-sheet {
+  background: #ffffff;
+  color: #111827;
+  width: 100%;
+  max-width: 210mm;
+  margin: 0 auto 2rem auto;
+  padding: 14mm 14mm 12mm 14mm;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08),
+    0 8px 10px -6px rgba(15, 23, 42, 0.04);
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  position: relative;
+}
+
+/* 시트 내부 표 공통 스타일 */
+.sheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.sheet-table th,
+.sheet-table td {
+  border: 1px solid #94a3b8;
+  padding: 5px 6px;
+}
+
+.sheet-table th {
+  background-color: #f1f5f9;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* 촘촘한 그리드 테이블 (아동수당, 유기정기금, 나이연도표) */
+.sheet-table-compact th,
+.sheet-table-compact td {
+  padding: 3.5px 4px;
+  font-size: 11px;
+}
+
+/* 인쇄 전용 미디어 쿼리 */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .a4-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 4mm 4mm !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .a4-sheet:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
 }
